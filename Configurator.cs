@@ -324,7 +324,6 @@ namespace RestaurantPOS
         public int AddNewOrder(int table_ID, char status, int staffMember_ID)
         {
             SqlConnection connection = this.manipulator.GetConnection();
-
             int order_ID = -1;
 
             try
@@ -333,36 +332,16 @@ namespace RestaurantPOS
 
                 SqlCommand command = this.manipulator.GetCommand();
 
-                command.CommandText = "insert into dbo.[Order] ([Table_ID], [Status], [StaffMember_ID]) " +
-                    "values (@Table_ID, @Status, @StaffMember_ID); " +
-                    "select SCOPE_IDENTITY() as [LastID] ;";
+                command.CommandText =
+                    "INSERT INTO dbo.[Order] ([Table_ID], [Status], [StaffMember_ID]) " +
+                    "VALUES (@Table_ID, @Status, @StaffMember_ID); " +
+                    "SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
-                SqlParameter param = null;
+                command.Parameters.AddWithValue("@Table_ID", table_ID);
+                command.Parameters.AddWithValue("@Status", status);
+                command.Parameters.AddWithValue("@StaffMember_ID", staffMember_ID);
 
-                param = new SqlParameter("@Table_ID", SqlDbType.Int);
-                param.Value = table_ID;
-                command.Parameters.Add(param);
-
-                param = new SqlParameter("@Status", SqlDbType.Char);
-                param.Value = status;
-                command.Parameters.Add(param);
-
-                param = new SqlParameter("@StaffMember_ID", SqlDbType.Int);
-                param.Value = staffMember_ID;
-                command.Parameters.Add(param);
-
-                //command.ExecuteNonQuery();
-
-                SqlDataReader reader = command.ExecuteReader();
-
-                using (reader)
-                {
-                    if (reader.Read())
-                    {
-                        order_ID = Convert.ToInt32(reader["LastID"]);
-                    }
-                }
-
+                order_ID = (int)command.ExecuteScalar(); // ✅ MUCH SAFER
             }
             catch (Exception e)
             {

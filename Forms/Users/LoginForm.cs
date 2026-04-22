@@ -31,11 +31,28 @@ namespace RestaurantPOS
             //    MessageBox.Show("Wrong username or password.");
             //}
 
-            string username = this.textBoxUsername.Text;
-            string password = this.textBoxPassword.Text;
+            string username = this.textBoxUsername.Text.Trim();
+            string password = this.textBoxPassword.Text.Trim();
 
+            // ✅ VALIDATION FIRST
+            if (string.IsNullOrEmpty(username) && string.IsNullOrEmpty(password))
+            {
+                MessageBox.Show("Please input username and password first.");
+                return;
+            }
+            else if (string.IsNullOrEmpty(username))
+            {
+                MessageBox.Show("Please input username first.");
+                return;
+            }
+            else if (string.IsNullOrEmpty(password))
+            {
+                MessageBox.Show("Please input password first.");
+                return;
+            }
+
+            // ✅ ONLY CALL DATABASE IF VALID
             Configurator configurator = new Configurator();
-
             int role = configurator.CheckLoginAndRole(username, password);
 
             if (role != 0)
@@ -43,6 +60,7 @@ namespace RestaurantPOS
                 this.Hide();
                 MainForm mainForm = new MainForm(role);
                 mainForm.ShowDialog();
+                this.Close();
             }
             else
             {
