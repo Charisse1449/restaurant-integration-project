@@ -162,7 +162,6 @@ namespace RestaurantPOS.Forms
             this.dataGridViewOrderMenuItems.AllowUserToDeleteRows = true;
             this.dataGridViewOrderMenuItems.ReadOnly = false;
             buttonSave.Visible = true;
-            //buttonCancel.Visible = true;
             buttonEdit.Visible = false;
             textBoxTableNumber.Visible = false;
             comboBoxTableNumber.Visible = true;
@@ -170,15 +169,25 @@ namespace RestaurantPOS.Forms
 
             textBoxStaffMember.Visible = false;
             comboBoxStaffMember.Visible = true;
+
             Configurator configurator = new Configurator();
             DataTable dTableStaffMembers = configurator.LoadStaffMembers();
             this.comboBoxStaffMember.DataSource = dTableStaffMembers;
             this.comboBoxStaffMember.ValueMember = "staffMember_ID";
             this.comboBoxStaffMember.DisplayMember = "displayName";
-            comboBoxStaffMember.Text = staffMember.DisplayName;
-            
 
-            dataGridViewOrderMenuItems.CellClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dataGridViewOrderMenuItems_CellClick);
+            // ✅ FIX IS HERE
+            if (staffMember != null)
+            {
+                comboBoxStaffMember.Text = staffMember.DisplayName;
+            }
+            else
+            {
+                MessageBox.Show("No staff assigned to this order.");
+            }
+
+            dataGridViewOrderMenuItems.CellClick +=
+                new System.Windows.Forms.DataGridViewCellEventHandler(this.dataGridViewOrderMenuItems_CellClick);
         }
 
         //private void buttonCancel_Click(object sender, EventArgs e)

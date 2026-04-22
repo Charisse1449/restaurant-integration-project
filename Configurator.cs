@@ -1079,9 +1079,8 @@ namespace RestaurantPOS
 
                 SqlCommand command = this.manipulator.GetCommand();
 
-                command.CommandText = "select sm.[StaffMember_ID], sm.[FirstName], sm.[MiddleName], sm.[LastName], sm.[DisplayName] " +
-                    "from dbo.[StaffMember] sm inner join dbo.[Order] o on sm.[StaffMember_ID] = o.[StaffMember_ID] " +
-                    "where o.[Order_ID] = @Order_ID ";
+                command.CommandText = "select sm.[StaffMember_ID], sm.[FirstName], sm.[MiddleName], sm.[LastName], sm.[DisplayName]" +
+                "from dbo.[Order] o left join dbo.[StaffMember] sm on sm.[StaffMember_ID] = o.[StaffMember_ID] where o.[Order_ID] = @Order_ID ";
 
                 SqlParameter param = null;
                 param = new SqlParameter("@Order_ID", SqlDbType.Int);
