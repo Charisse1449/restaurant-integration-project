@@ -27,18 +27,25 @@ namespace RestaurantPOS.Forms
 
             DataTable dTableTables = configurator.LoadTables();
 
-            this.table1.Text = Convert.ToString(dTableTables.Rows[0].ItemArray[0]);
-            this.table2.Text = Convert.ToString(dTableTables.Rows[1].ItemArray[0]);
-            this.table3.Text = Convert.ToString(dTableTables.Rows[2].ItemArray[0]);
-            this.table4.Text = Convert.ToString(dTableTables.Rows[3].ItemArray[0]);
-            this.table5.Text = Convert.ToString(dTableTables.Rows[4].ItemArray[0]);
-            this.table6.Text = Convert.ToString(dTableTables.Rows[5].ItemArray[0]);
-            this.table7.Text = Convert.ToString(dTableTables.Rows[6].ItemArray[0]);
-            this.table8.Text = Convert.ToString(dTableTables.Rows[7].ItemArray[0]);
-            this.table9.Text = Convert.ToString(dTableTables.Rows[8].ItemArray[0]);
+            List<Button> tableButtons = new List<Button>
+{
+            table1, table2, table3, table4, table5,
+            table6, table7, table8, table9
+};
 
-            List<Button> tableButtons = new List<Button> { table1, table2, table3, table4, table5, table6, table7, table8, table9};
-             
+            for (int i = 0; i < tableButtons.Count; i++)
+            {
+                if (i < dTableTables.Rows.Count)
+                {
+                    tableButtons[i].Text = dTableTables.Rows[i]["Table_ID"].ToString();
+                }
+                else
+                {
+                    tableButtons[i].Text = "-";
+                    tableButtons[i].Enabled = false;
+                }
+            }
+
 
             DataTable dTableActiveTables = configurator.LoadActiveTables();
 
@@ -48,7 +55,7 @@ namespace RestaurantPOS.Forms
 
                 for(int y = 0; y < tableButtons.Count; y++)
                 {
-                    if(y + 1 == table_id)
+                    if (tableButtons[y].Text == table_id.ToString())
                     {
                         tableButtons[y].BackColor = Color.DarkRed;
                         activeTableButtons.Add(tableButtons[y]);
@@ -134,7 +141,7 @@ namespace RestaurantPOS.Forms
      
             this.Controls.Clear();
             this.InitializeComponent();
-            this.Tables_Load(e, e);
+            this.Tables_Load(this, EventArgs.Empty);
             //this.Show();
         }
 
