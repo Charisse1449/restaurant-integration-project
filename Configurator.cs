@@ -1,4 +1,6 @@
-﻿using RestaurantPOS.Entities;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using RestaurantPOS.Entities;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -8,8 +10,6 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Net.Http;
-using Newtonsoft.Json.Linq;
 
 namespace RestaurantPOS
 {
@@ -20,6 +20,34 @@ namespace RestaurantPOS
         public Configurator()
         {
             this.manipulator = new DBManipulator();
+        }
+
+        private JArray ExtractArrayFromApiResponse(string json)
+        {
+            JToken token = JToken.Parse(json);
+
+            if (token.Type == JTokenType.Array)
+                return (JArray)token;
+
+            if (token["data"] != null)
+            {
+                if (token["data"].Type == JTokenType.Array)
+                    return (JArray)token["data"];
+
+                if (token["data"]["data"] != null && token["data"]["data"].Type == JTokenType.Array)
+                    return (JArray)token["data"]["data"];
+            }
+
+            if (token["orders"] != null && token["orders"].Type == JTokenType.Array)
+                return (JArray)token["orders"];
+
+            if (token["recipes"] != null && token["recipes"].Type == JTokenType.Array)
+                return (JArray)token["recipes"];
+
+            if (token["tables"] != null && token["tables"].Type == JTokenType.Array)
+                return (JArray)token["tables"];
+
+            throw new Exception("Cannot find array in API response: " + json);
         }
 
         /// <summary>
@@ -38,7 +66,18 @@ namespace RestaurantPOS
                     string url = "http://127.0.0.1:8000/api/tables";
                     string json = client.GetStringAsync(url).Result;
 
-                    JArray tables = JArray.Parse(json);
+                    JToken token = JToken.Parse(json);
+
+                    JArray tables;
+
+                    if (token.Type == JTokenType.Array)
+                    {
+                        tables = (JArray)token;
+                    }
+                    else
+                    {
+                        tables = (JArray)token["data"];
+                    }
 
                     foreach (var table in tables)
                     {
@@ -68,7 +107,18 @@ namespace RestaurantPOS
                     string url = "http://127.0.0.1:8000/api/tables";
                     string json = client.GetStringAsync(url).Result;
 
-                    JArray tables = JArray.Parse(json);
+                    JToken token = JToken.Parse(json);
+
+                    JArray tables;
+
+                    if (token.Type == JTokenType.Array)
+                    {
+                        tables = (JArray)token;
+                    }
+                    else
+                    {
+                        tables = (JArray)token["data"];
+                    }
 
                     foreach (var table in tables)
                     {
@@ -100,70 +150,7 @@ namespace RestaurantPOS
         /// <returns></returns>
         public DataTable LoadOrderDetailsByTableID(int? id)
         {
-            DataTable result = new DataTable();
-
-            result.Columns.Add("Order_ID");
-            result.Columns.Add("Table_ID");
-            result.Columns.Add("Name");
-            result.Columns.Add("Qantity");
-            result.Columns.Add("Price");
-            result.Columns.Add("MenuItem_ID");
-
-            SqlConnection connection = this.manipulator.GetConnection();
-
-            try
-            {
-                connection.Open();
-
-                SqlCommand command = this.manipulator.GetCommand();
-
-                command.CommandText = "select o.[Order_ID], m.[Name], om.[Quantity], om.[MenuItem_ID], m.[Price] " +
-                    "from dbo.[MenuItem] m inner join dbo.[OrderMenuItem] om on m.[MenuItem_ID] = om.[MenuItem_ID] " +
-                    "inner join dbo.[Order] o on om.[Order_ID] = o.[Order_ID] inner join dbo.[Table] t on t.[Table_ID] = o.[Table_ID] " +
-                    "where o.[Status] = 'A' and t.[Table_ID] = @Table_ID";
-
-                SqlParameter param = null;
-
-                param = new SqlParameter("@Table_ID", SqlDbType.Int);
-                param.Value = id;
-                command.Parameters.Add(param);
-
-
-                SqlDataReader reader = command.ExecuteReader();
-
-                using (reader)
-                {
-                    while (reader.Read())
-                    {
-                        int order_ID = Convert.ToInt32(reader["Order_ID"]);
-                        int menuItem_ID = Convert.ToInt32(reader["MenuItem_ID"]);
-                        string name = Convert.ToString(reader["Name"]);
-                        int quantity = Convert.ToInt32(reader["Quantity"]);
-                        double price = Convert.ToDouble(reader["Price"]);
-
-                        DataRow row = result.NewRow();
-
-                        row[0] = order_ID;
-                        row[1] = id;
-                        row[2] = name;
-                        row[3] = quantity;
-                        row[4] = price;
-                        row[5] = menuItem_ID;
-
-                        result.Rows.Add(row);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                MessageBox.Show(e.ToString());
-            }
-            finally
-            {
-                connection.Close();
-            }
-
-            return result;
+            return new DataTable(); // TEMP
         }
 
         /// <summary>
@@ -178,47 +165,45 @@ namespace RestaurantPOS
             result.Columns.Add("Order_ID");
             result.Columns.Add("Table_ID");
 
-            SqlConnection connection = this.manipulator.GetConnection();
-
             try
             {
-                connection.Open();
-
-                SqlCommand command = this.manipulator.GetCommand();
-
-                command.CommandText = "select [Order_ID], [Table_ID] from dbo.[Order] where [Status] = @Status order by [Order_ID] DESC";
-
-                SqlParameter param = null;
-
-                param = new SqlParameter("@Status", SqlDbType.Char);
-                param.Value = status;
-                command.Parameters.Add(param);
-
-                SqlDataReader reader = command.ExecuteReader();
-
-                using (reader)
+                using (HttpClient client = new HttpClient())
                 {
-                    while (reader.Read())
+                    string url = "http://127.0.0.1:8000/api/orders";
+                    string json = client.GetStringAsync(url).Result;
+
+                    JArray orders = ExtractArrayFromApiResponse(json);
+
+                    foreach (var order in orders)
                     {
-                        int order_ID = Convert.ToInt32(reader["Order_ID"]);
-                        int table_ID = Convert.ToInt32(reader["Table_ID"]);
+                        string apiStatus = order["status"]?.ToString();
 
-                        DataRow row = result.NewRow();
+                        bool include = false;
 
-                        row[0] = order_ID;
-                        row[1] = table_ID;
+                        // Old desktop: A = active, C = closed
+                        // Laravel: new/preparing/ready/completed
+                        if (status == 'A' && apiStatus != "completed")
+                        {
+                            include = true;
+                        }
+                        else if (status == 'C' && apiStatus == "completed")
+                        {
+                            include = true;
+                        }
 
-                        result.Rows.Add(row);
+                        if (include)
+                        {
+                            DataRow row = result.NewRow();
+                            row["Order_ID"] = order["id"].ToString();
+                            row["Table_ID"] = order["table_number"]?.ToString();
+                            result.Rows.Add(row);
+                        }
                     }
                 }
             }
             catch (Exception e)
             {
-                MessageBox.Show(e.ToString());
-            }
-            finally
-            {
-                connection.Close();
+                MessageBox.Show("API Error LoadOrders:\n" + e.Message);
             }
 
             return result;
@@ -232,168 +217,70 @@ namespace RestaurantPOS
 
         public DataTable LoadOrderDetailsByOrderID(int id)
         {
-            DataTable result = new DataTable();
-
-            result.Columns.Add("Order_ID");
-            result.Columns.Add("Table_ID");
-            result.Columns.Add("Name");
-            result.Columns.Add("Qantity");
-            result.Columns.Add("Price");
-            result.Columns.Add("MenuItem_ID");
-
-            SqlConnection connection = this.manipulator.GetConnection();
-
-            try
-            {
-                connection.Open();
-
-                SqlCommand command = this.manipulator.GetCommand();
-
-                command.CommandText = "select o.[Order_ID], o.[Table_ID], m.[Name], om.[Quantity], m.[Price], m.[MenuItem_ID] " +
-                    "from dbo.[MenuItem] m inner join dbo.[OrderMenuItem] om on m.[MenuItem_ID] = om.[MenuItem_ID] " +
-                    "inner join dbo.[Order] o on om.[Order_ID] = o.[Order_ID]" +
-                    "where o.[Order_ID] = @Order_ID";
-
-                SqlParameter param = null;
-
-                param = new SqlParameter("@Order_ID", SqlDbType.Int);
-                param.Value = id;
-                command.Parameters.Add(param);
-
-
-                SqlDataReader reader = command.ExecuteReader();
-
-                using (reader)
-                {
-                    while (reader.Read())
-                    {
-                        int order_ID = Convert.ToInt32(reader["Order_ID"]);
-                        int table_ID = Convert.ToInt32(reader["Table_ID"]);
-                        string name = Convert.ToString(reader["Name"]);
-                        int quantity = Convert.ToInt32(reader["Quantity"]);
-                        double price = Convert.ToDouble(reader["Price"]);
-                        int menuItem_ID = Convert.ToInt32(reader["MenuItem_ID"]);
-
-                        DataRow row = result.NewRow();
-
-                        row[0] = order_ID;
-                        row[1] = table_ID;
-                        row[2] = name;
-                        row[3] = quantity;
-                        row[4] = price;
-                        row[5] = menuItem_ID;
-
-                        result.Rows.Add(row);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                MessageBox.Show(e.ToString());
-            }
-            finally
-            {
-                connection.Close();
-            }
-
-            return result;
+            return new DataTable(); // TEMP
         }
 
         public int AddNewOrder(int table_ID, char status, int staffMember_ID)
         {
-            SqlConnection connection = this.manipulator.GetConnection();
-
-            int order_ID = -1;
-
             try
             {
-                connection.Open();
-
-                SqlCommand command = this.manipulator.GetCommand();
-
-                command.CommandText = "insert into dbo.[Order] ([Table_ID], [Status], [StaffMember_ID]) " +
-                    "values (@Table_ID, @Status, @StaffMember_ID); " +
-                    "select SCOPE_IDENTITY() as [LastID] ;";
-
-                SqlParameter param = null;
-
-                param = new SqlParameter("@Table_ID", SqlDbType.Int);
-                param.Value = table_ID;
-                command.Parameters.Add(param);
-
-                param = new SqlParameter("@Status", SqlDbType.Char);
-                param.Value = status;
-                command.Parameters.Add(param);
-
-                param = new SqlParameter("@StaffMember_ID", SqlDbType.Int);
-                param.Value = staffMember_ID;
-                command.Parameters.Add(param);
-
-                //command.ExecuteNonQuery();
-
-                SqlDataReader reader = command.ExecuteReader();
-
-                using (reader)
+                using (HttpClient client = new HttpClient())
                 {
-                    if (reader.Read())
+                    var data = new
                     {
-                        order_ID = Convert.ToInt32(reader["LastID"]);
-                    }
+                        type = "dine-in",
+                        table_number = table_ID,
+                        subtotal = 0,
+                        tax = 0,
+                        delivery_fee = 0,
+                        total = 0,
+                        status = "new"
+                    };
+
+                    string jsonData = JsonConvert.SerializeObject(data);
+                    StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+                    var response = client.PostAsync("http://127.0.0.1:8000/api/orders", content).Result;
+
+                    string result = response.Content.ReadAsStringAsync().Result;
+
+                    JObject obj = JObject.Parse(result);
+
+                    return (int)obj["id"];
                 }
-
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                MessageBox.Show(e.ToString());
+                MessageBox.Show("API Error AddNewOrder:\n" + ex.Message);
+                return -1;
             }
-            finally
-            {
-                connection.Close();
-            }
-
-            return order_ID;
-
         }
 
         public void AddNewOrderMenuItem(int order_ID, int menuItem_ID, int quantity)
         {
-            SqlConnection connection = this.manipulator.GetConnection();
-
             try
             {
-                connection.Open();
+                using (HttpClient client = new HttpClient())
+                {
+                    var data = new
+                    {
+                        recipe_id = menuItem_ID,
+                        quantity = quantity,
+                        name = "Item",
+                        price = 0,
+                        total = 0
+                    };
 
-                SqlCommand command = this.manipulator.GetCommand();
+                    string jsonData = JsonConvert.SerializeObject(data);
+                    StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
 
-                command.CommandText = "insert into dbo.[OrderMenuItem] ([Order_ID], [MenuItem_ID], [Quantity]) " +
-                    "values (@Order_ID, @MenuItem_ID, @Quantity)";
-
-                SqlParameter param = null;
-
-                param = new SqlParameter("@Order_ID", SqlDbType.Int);
-                param.Value = order_ID;
-                command.Parameters.Add(param);
-
-                param = new SqlParameter("@MenuItem_ID", SqlDbType.Int);
-                param.Value = menuItem_ID;
-                command.Parameters.Add(param);
-
-                param = new SqlParameter("@Quantity", SqlDbType.Int);
-                param.Value = quantity;
-                command.Parameters.Add(param);
-
-                command.ExecuteNonQuery();
-
+                    client.PostAsync($"http://127.0.0.1:8000/api/orders/{order_ID}/items", content).Wait();
+                }
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                MessageBox.Show(e.ToString());
+                MessageBox.Show("API Error AddOrderItem:\n" + ex.Message);
             }
-            finally
-            {
-                connection.Close();
-            }
-
         }
 
         public void UpdateOrder(int order_ID, int table_ID, char status)
@@ -542,39 +429,9 @@ namespace RestaurantPOS
 
         public int CheckLoginAndRole(string username, string password)
         {
-            bool login = false;
-            int role = 0;
-
-            SqlConnection connection = this.manipulator.GetConnection();
-            try
-            {
-                connection.Open();
-                SqlCommand command = this.manipulator.GetCommand();
-                command.CommandText = "SELECT [Role_ID] FROM dbo.[Login] WHERE [Username] = @username AND [Password] = @password";
-                SqlParameter param = null;
-                param = new SqlParameter("@username", SqlDbType.VarChar);
-                param.Value = username;
-                command.Parameters.Add(param);
-                param = new SqlParameter("@password", SqlDbType.VarChar);
-                param.Value = password;
-                command.Parameters.Add(param);
-                SqlDataReader reader = command.ExecuteReader();
-                using (reader)
-                {
-
-                    if (reader.Read())
-                    {
-                        login = true;
-                        role = Convert.ToInt32(reader["Role_ID"]);
-                    }
-                }
-            }
-            finally
-            {
-                connection.Close();
-            }
-
-            return role;
+            // TEMPORARY BYPASS while integrating Laravel API
+            // 1 = admin role
+            return 1;
         }
 
         /// <summary>
@@ -684,51 +541,34 @@ namespace RestaurantPOS
             result.Columns.Add("MenuItem_ID");
             result.Columns.Add("Name");
 
-
-            SqlConnection connection = this.manipulator.GetConnection();
-
             try
             {
-                connection.Open();
-
-                SqlCommand command = this.manipulator.GetCommand();
-
-                command.CommandText = "select * from dbo.[MenuItem] where [Type] = @Type";
-
-                SqlParameter param = null;
-
-                param = new SqlParameter("@Type", SqlDbType.VarChar);
-                param.Value = type;
-
-                command.Parameters.Add(param);
-
-                SqlDataReader reader = command.ExecuteReader();
-
-                using (reader)
+                using (HttpClient client = new HttpClient())
                 {
-                    while (reader.Read())
+                    string url = "http://127.0.0.1:8000/api/recipes";
+                    string json = client.GetStringAsync(url).Result;
+
+                    JArray recipes = ExtractArrayFromApiResponse(json);
+
+                    foreach (var recipe in recipes)
                     {
-                        int menuItem_ID = Convert.ToInt32(reader["MenuItem_ID"]);
-                        string name = Convert.ToString(reader["Name"]);
+                        string category = recipe["category"]?.ToString();
 
-
-                        DataRow row = result.NewRow();
-
-                        row[0] = menuItem_ID;
-                        row[1] = name;
-
-
-                        result.Rows.Add(row);
+                        // If your old C# menu type does not match Laravel category,
+                        // still show all for now.
+                        if (string.IsNullOrEmpty(type) || category == type)
+                        {
+                            DataRow row = result.NewRow();
+                            row["MenuItem_ID"] = recipe["id"].ToString();
+                            row["Name"] = recipe["name"].ToString();
+                            result.Rows.Add(row);
+                        }
                     }
                 }
             }
             catch (Exception e)
             {
-                MessageBox.Show(e.ToString());
-            }
-            finally
-            {
-                connection.Close();
+                MessageBox.Show("API Error LoadMenuItemsByType:\n" + e.Message);
             }
 
             return result;
@@ -741,53 +581,44 @@ namespace RestaurantPOS
         /// <returns></returns>
         public Entities.MenuItem LoadMenuItemByName(string name)
         {
-            Entities.MenuItem result = null;
-
-            //if (name == null)
-            //{
-            //    result = new Entities.MenuItem();
-            //    result.MenuItem_ID = 0;
-            //    result.Name = "";
-            //    result.Type = "";
-            //    result.Price = 0;
-            //    result.Quantity = "";
-            //    result.Description = "";
-            //}
-
-
-
-            SqlConnection connection = this.manipulator.GetConnection();
-
-            connection.Open();
-
-            SqlCommand command = this.manipulator.GetCommand();
-            command.CommandText = "select * from dbo.[MenuItem] where [Name] = @Name";
-
-            SqlParameter param = null;
-            param = new SqlParameter("@Name", SqlDbType.VarChar);
-            param.Value = name;
-            command.Parameters.Add(param);
-
-            SqlDataReader reader = command.ExecuteReader();
-
-            using (reader)
+            try
             {
-                if (reader.Read())
+                using (HttpClient client = new HttpClient())
                 {
-                    result = new Entities.MenuItem();
-                    result.MenuItem_ID = Convert.ToInt32(reader["MenuItem_ID"]);
-                    result.Name = Convert.ToString(reader["Name"]);
-                    result.Type = Convert.ToString(reader["Type"]);
-                    result.Price = Convert.ToDouble(reader["Price"]);
-                    result.Quantity = Convert.ToString(reader["Quantity"]);
-                    result.Description = Convert.ToString(reader["Description"]);
+                    string json = client.GetStringAsync("http://127.0.0.1:8000/api/recipes").Result;
+                    JArray recipes = ExtractArrayFromApiResponse(json);
 
+                    foreach (var recipe in recipes)
+                    {
+                        if (recipe["name"]?.ToString() == name)
+                        {
+                            return new Entities.MenuItem
+                            {
+                                MenuItem_ID = Convert.ToInt32(recipe["id"]),
+                                Name = recipe["name"]?.ToString(),
+                                Type = recipe["category"]?.ToString(),
+                                Price = Convert.ToDouble(recipe["price"]),
+                                Quantity = "1",
+                                Description = recipe["instructions"]?.ToString()
+                            };
+                        }
+                    }
                 }
             }
-            connection.Close();
+            catch (Exception ex)
+            {
+                MessageBox.Show("API Error LoadMenuItemByName:\n" + ex.Message);
+            }
 
-
-            return result;
+            return new Entities.MenuItem
+            {
+                MenuItem_ID = 0,
+                Name = "",
+                Type = "",
+                Price = 0,
+                Quantity = "1",
+                Description = ""
+            };
         }
 
         /// <summary>
@@ -801,42 +632,42 @@ namespace RestaurantPOS
         /// <param name="description"></param>
         public void UpdateMenuItem(int id, string name, string type, double price, string quantity, string description)
         {
-            SqlConnection connection = this.manipulator.GetConnection();
-            connection.Open();
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    var data = new
+                    {
+                        name = name,
+                        category = type,
+                        price = price,
+                        base_portions = 1,
+                        prep_time = 10,
+                        cook_time = 10,
+                        difficulty = "easy",
+                        ingredients = new string[] { },
+                        instructions = description,
+                        is_active = true
+                    };
 
-            SqlCommand command = this.manipulator.GetCommand();
-            command.CommandText = "UPDATE dbo.[MenuItem] SET [Name] = @Name, [Type] = @Type, [Price] = @Price, [Quantity] = @Quantity, [Description] = @Description " +
-                "WHERE [MenuItem_ID] = @MenuItem_ID";
+                    string jsonData = JsonConvert.SerializeObject(data);
+                    StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
 
-            SqlParameter param = null;
+                    var response = client.PutAsync($"http://127.0.0.1:8000/api/recipes/{id}", content).Result;
+                    string responseBody = response.Content.ReadAsStringAsync().Result;
 
-            param = new SqlParameter("@MenuItem_ID", SqlDbType.Int);
-            param.Value = id;
-            command.Parameters.Add(param);
-
-            param = new SqlParameter("@Name", SqlDbType.VarChar);
-            param.Value = name;
-            command.Parameters.Add(param);
-
-            param = new SqlParameter("@Type", SqlDbType.VarChar);
-            param.Value = type;
-            command.Parameters.Add(param);
-
-            param = new SqlParameter("@Price", SqlDbType.Decimal);
-            param.Value = price;
-            command.Parameters.Add(param);
-
-            param = new SqlParameter("@Quantity", SqlDbType.VarChar);
-            param.Value = quantity;
-            command.Parameters.Add(param);
-
-            param = new SqlParameter("@Description", SqlDbType.VarChar);
-            param.Value = description;
-            command.Parameters.Add(param);
-
-            command.ExecuteNonQuery();
-            connection.Close();
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        MessageBox.Show("API Error UpdateMenuItem:\n" + response.StatusCode + "\n" + responseBody);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("API Error UpdateMenuItem:\n" + ex.Message);
+            }
         }
+
 
         /// <summary>
         /// Create new menu item.
@@ -848,48 +679,45 @@ namespace RestaurantPOS
         /// <param name="description"></param>
         public void CreateMenuItem(string name, string type, double price, string quantity, string description)
         {
-            SqlConnection connection = this.manipulator.GetConnection();
-
-            try
+            using (HttpClient client = new HttpClient())
             {
-                connection.Open();
+                try
+                {
+                    var data = new
+                    {
+                        name = name,
+                        category = type,
+                        price = price,
+                        base_portions = 1,
+                        prep_time = 10,
+                        cook_time = 10,
+                        difficulty = "easy",
+                        ingredients = new string[] { },
+                        instructions = description,
+                        is_active = true
+                    };
 
-                SqlCommand command = this.manipulator.GetCommand();
+                    string jsonData = JsonConvert.SerializeObject(data);
+                    StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
 
-                command.CommandText = "insert into dbo.[MenuItem] ([Name], [Type], [Price], [Quantity], [Description]) " +
-                    "values (@Name, @Type, @Price, @Quantity, @Description)";
+                    var response = client.PostAsync("http://127.0.0.1:8000/api/recipes", content).Result;
+                    string result = response.Content.ReadAsStringAsync().Result;
 
-                SqlParameter param = null;
+                    MessageBox.Show("Status: " + response.StatusCode + "\n" + result);
 
-                param = new SqlParameter("@Name", SqlDbType.VarChar);
-                param.Value = name;
-                command.Parameters.Add(param);
-
-                param = new SqlParameter("@Type", SqlDbType.VarChar);
-                param.Value = type;
-                command.Parameters.Add(param);
-
-                param = new SqlParameter("@Price", SqlDbType.Decimal);
-                param.Value = price;
-                command.Parameters.Add(param);
-
-                param = new SqlParameter("@Quantity", SqlDbType.VarChar);
-                param.Value = quantity;
-                command.Parameters.Add(param);
-
-                param = new SqlParameter("@Description", SqlDbType.VarChar);
-                param.Value = description;
-                command.Parameters.Add(param);
-
-                command.ExecuteNonQuery();
-            }
-            catch (Exception e)
-            {
-                MessageBox.Show(e.ToString());
-            }
-            finally
-            {
-                connection.Close();
+                    if (response.IsSuccessStatusCode)
+                    {
+                        MessageBox.Show("Menu item added successfully!");
+                    }
+                    else
+                    {
+                        MessageBox.Show("API Error: " + response.StatusCode + "\n" + result);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("API Error CreateMenuItem: " + ex.Message);
+                }
             }
         }
 
@@ -899,34 +727,27 @@ namespace RestaurantPOS
         /// <param name="id"></param>
         public void DeleteMenuItem(int id)
         {
-            SqlConnection connection = this.manipulator.GetConnection();
-
             try
             {
-                connection.Open();
+                using (HttpClient client = new HttpClient())
+                {
+                    var response = client.DeleteAsync($"http://127.0.0.1:8000/api/recipes/{id}").Result;
+                    string responseBody = response.Content.ReadAsStringAsync().Result;
 
-                SqlCommand command = this.manipulator.GetCommand();
-
-                command.CommandText = "delete from dbo.[OrderMenuItem] where [MenuItem_ID] = @MenuItem_ID; " +
-                    "delete from dbo.[MenuItem] where MenuItem_ID = @MenuItem_ID";
-
-                SqlParameter param = null;
-
-                param = new SqlParameter("@MenuItem_ID", SqlDbType.Int);
-                param.Value = id;
-                command.Parameters.Add(param);
-
-                command.ExecuteNonQuery();
+                    if (response.IsSuccessStatusCode)
+                    {
+                        MessageBox.Show("Successfully deleted.");
+                    }
+                    else
+                    {
+                        MessageBox.Show("API Error DeleteMenuItem:\n" + response.StatusCode + "\n" + responseBody);
+                    }
+                }
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                MessageBox.Show(e.ToString());
+                MessageBox.Show("API Error DeleteMenuItem:\n" + ex.Message);
             }
-            finally
-            {
-                connection.Close();
-            }
-
         }
 
         //staffMember
@@ -938,168 +759,38 @@ namespace RestaurantPOS
             result.Columns.Add("staffMember_ID");
             result.Columns.Add("displayName");
 
-            SqlConnection connection = this.manipulator.GetConnection();
-
-            try
-            {
-                connection.Open();
-
-                SqlCommand command = this.manipulator.GetCommand();
-
-                command.CommandText = "SELECT [StaffMember_ID], [DisplayName] FROM dbo.[StaffMember] ";
-
-                SqlDataReader reader = command.ExecuteReader();
-
-                using (reader)
-                {
-                    while (reader.Read())
-                    {
-                        int staffMemeber_ID = Convert.ToInt32(reader["StaffMember_ID"]);
-                        string displayName = Convert.ToString(reader["DisplayName"]);
-
-                        DataRow row = result.NewRow();
-
-                        row[0] = staffMemeber_ID;
-                        row[1] = displayName;
-
-                        result.Rows.Add(row);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                MessageBox.Show(e.ToString());
-            }
-            finally
-            {
-                connection.Close();
-            }
+            DataRow row = result.NewRow();
+            row["staffMember_ID"] = 1;
+            row["displayName"] = "Default Staff";
+            result.Rows.Add(row);
 
             return result;
         }
 
         public StaffMember LoadStaffMembersByStaffMemberID(int staffMember_ID)
         {
-            StaffMember result = null;
+            StaffMember result = new StaffMember();
 
-            SqlConnection connection = this.manipulator.GetConnection();
-
-            try
-            {
-                connection.Open();
-
-                SqlCommand command = this.manipulator.GetCommand();
-
-                command.CommandText = "select [StaffMember_ID], [FirstName], [MiddleName], [LastName], [DisplayName], [Image] " +
-                    "from dbo.[StaffMember] " +
-                    "where [StaffMember_ID] = @StaffMember_ID ";
-
-                SqlParameter param = null;
-                param = new SqlParameter("@StaffMember_ID", SqlDbType.Int);
-                param.Value = staffMember_ID;
-                command.Parameters.Add(param);
-
-                SqlDataReader reader = command.ExecuteReader();
-
-                using (reader)
-                {
-                    if (reader.Read())
-                    {
-                        result = new StaffMember();
-
-
-                        string firstName = Convert.ToString(reader["FirstName"]);
-                        string middleName = Convert.ToString(reader["MiddleName"]);
-                        string lastName = Convert.ToString(reader["LastName"]);
-                        string displayName = Convert.ToString(reader["DisplayName"]);
-
-                        byte[] image;
-                        if (reader["Image"] != DBNull.Value)
-                        {
-                            image = ((byte[])reader["Image"]);
-                        }
-                        else
-                        {
-                            image = null;
-                        }
-
-
-                        result.StaffMember_ID = staffMember_ID;
-                        result.FirstName = firstName;
-                        result.MiddleName = middleName;
-                        result.LastName = lastName;
-                        result.DisplayName = displayName;
-                        result.Image = image;
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                MessageBox.Show(e.ToString());
-            }
-            finally
-            {
-                connection.Close();
-            }
+            result.StaffMember_ID = staffMember_ID;
+            result.FirstName = "Default";
+            result.MiddleName = "";
+            result.LastName = "Staff";
+            result.DisplayName = "Default Staff";
+            result.Image = null;
 
             return result;
         }
 
         public StaffMember LoadStaffMembersByOrderID(int order_ID)
         {
-            StaffMember result = null;
+            StaffMember result = new StaffMember();
 
-            SqlConnection connection = this.manipulator.GetConnection();
-
-            try
-            {
-                connection.Open();
-
-                SqlCommand command = this.manipulator.GetCommand();
-
-                command.CommandText = "select sm.[StaffMember_ID], sm.[FirstName], sm.[MiddleName], sm.[LastName], sm.[DisplayName] " +
-                    "from dbo.[StaffMember] sm inner join dbo.[Order] o on sm.[StaffMember_ID] = o.[StaffMember_ID] " +
-                    "where o.[Order_ID] = @Order_ID ";
-                command.CommandText = "select sm.[StaffMember_ID], sm.[FirstName], sm.[MiddleName], sm.[LastName], sm.[DisplayName]" +
-                "from dbo.[Order] o left join dbo.[StaffMember] sm on sm.[StaffMember_ID] = o.[StaffMember_ID] where o.[Order_ID] = @Order_ID ";
-
-                SqlParameter param = null;
-                param = new SqlParameter("@Order_ID", SqlDbType.Int);
-                param.Value = order_ID;
-                command.Parameters.Add(param);
-
-                SqlDataReader reader = command.ExecuteReader();
-
-                using (reader)
-                {
-                    if (reader.Read())
-                    {
-                        result = new StaffMember();
-
-                        int staffMember_ID = Convert.ToInt32(reader["StaffMember_ID"]);
-                        string firstName = Convert.ToString(reader["FirstName"]);
-                        string middleName = Convert.ToString(reader["MiddleName"]);
-                        string lastName = Convert.ToString(reader["LastName"]);
-                        string displayName = Convert.ToString(reader["DisplayName"]);
-
-
-                        result.StaffMember_ID = staffMember_ID;
-                        result.FirstName = firstName;
-                        result.MiddleName = middleName;
-                        result.LastName = lastName;
-                        result.DisplayName = displayName;
-
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                MessageBox.Show(e.ToString());
-            }
-            finally
-            {
-                connection.Close();
-            }
+            result.StaffMember_ID = 1;
+            result.FirstName = "Default";
+            result.MiddleName = "";
+            result.LastName = "Staff";
+            result.DisplayName = "Default Staff";
+            result.Image = null;
 
             return result;
         }

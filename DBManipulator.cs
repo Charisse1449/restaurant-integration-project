@@ -10,8 +10,8 @@ namespace RestaurantPOS
 {
     class DBManipulator
     {
-        private readonly static string connectionString =
-            "Server=localhost,1433;Database=RestaurantPOS_17118091;User Id=sa;Password=StrongPass@123;";
+        // DISABLED SQL CONNECTION (we now use API only)
+        private readonly static string connectionString = "";
 
         private SqlConnection connection;
         private SqlCommand command;

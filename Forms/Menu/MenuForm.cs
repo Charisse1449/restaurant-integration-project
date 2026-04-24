@@ -29,33 +29,25 @@ namespace RestaurantPOS.Forms
         {
             Configurator configurator = new Configurator();
 
-            DataTable dTableSalads = configurator.LoadMenuItemsByType("salad");
+            DataTable dTableSalads = configurator.LoadMenuItemsByType("Salads");
             MenuButtons_Load(dTableSalads, panelSalads);
 
-            DataTable dTableAppetizers = configurator.LoadMenuItemsByType("appetizer");
+            DataTable dTableAppetizers = configurator.LoadMenuItemsByType("Appetizers");
             MenuButtons_Load(dTableAppetizers, panelAppetizers);
 
-            DataTable dTableMainDeshes = configurator.LoadMenuItemsByType("main");
-            MenuButtons_Load(dTableMainDeshes, panelMainDishes);
+            DataTable dTableMainDishes = configurator.LoadMenuItemsByType("Main Dishes");
+            MenuButtons_Load(dTableMainDishes, panelMainDishes);
 
-            DataTable dTablePizza = configurator.LoadMenuItemsByType("pizza");
+            DataTable dTablePizza = configurator.LoadMenuItemsByType("Pizza");
             MenuButtons_Load(dTablePizza, panelPizza);
 
-            DataTable dTableDesserts = configurator.LoadMenuItemsByType("dessert");
+            DataTable dTableDesserts = configurator.LoadMenuItemsByType("Desserts");
             MenuButtons_Load(dTableDesserts, panelDesserts);
 
-            DataTable dTableDrinks = configurator.LoadMenuItemsByType("drink");
+            DataTable dTableDrinks = configurator.LoadMenuItemsByType("Drinks");
             MenuButtons_Load(dTableDrinks, panelDrinks);
 
-            if (role == 1)
-            {
-                buttonAdd.Visible = true;
-            }
-            else
-            {
-                buttonAdd.Visible = false;
-            }
-
+            buttonAdd.Visible = role == 1;
         }
 
         private void MenuButtons_Load(DataTable dTable, Panel panel)
@@ -97,9 +89,14 @@ namespace RestaurantPOS.Forms
 
             if (action == "view")
             {
-                MenuItemForm fMenuItem = new MenuItemForm(button.Text, role);
-                fMenuItem.FormClosed += new FormClosedEventHandler(child_FormClosed);
-                fMenuItem.ShowDialog();
+                MenuItemForm fMenuItem = new MenuItemForm(null, role);
+
+                if (fMenuItem.ShowDialog() == DialogResult.OK)
+                {
+                    this.Controls.Clear();
+                    this.InitializeComponent();
+                    this.MenuForm_Load(this, EventArgs.Empty);
+                }
             } 
             else if(action == "add")
             {

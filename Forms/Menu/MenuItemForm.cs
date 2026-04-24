@@ -37,13 +37,13 @@ namespace RestaurantPOS.Forms
                 textBoxType.ReadOnly = false;
                 textBoxType.Visible = false;
 
-                comboBoxType.Visible = true;
-                comboBoxType.Items.Add("Salad");
-                comboBoxType.Items.Add("Appetizer");
-                comboBoxType.Items.Add("Main");
+                comboBoxType.Items.Clear();
+                comboBoxType.Items.Add("Salads");
+                comboBoxType.Items.Add("Appetizers");
+                comboBoxType.Items.Add("Main Dishes");
                 comboBoxType.Items.Add("Pizza");
-                comboBoxType.Items.Add("Dessert");
-                comboBoxType.Items.Add("Drink");
+                comboBoxType.Items.Add("Desserts");
+                comboBoxType.Items.Add("Drinks");
 
                 textBoxPrice.ReadOnly = false;
                 textBoxQuantity.ReadOnly = false;
@@ -70,7 +70,7 @@ namespace RestaurantPOS.Forms
             buttonSave.Visible = false;
         }
 
-        private void RoleCheck (int role)
+        private void RoleCheck(int role)
         {
             if (role == 1 && menuItemName != null)
             {
@@ -78,6 +78,14 @@ namespace RestaurantPOS.Forms
                 buttonDelete.Visible = true;
                 buttonAdd.Visible = false;
                 comboBoxType.Visible = false;
+            }
+            else if (menuItemName == null)
+            {
+                buttonEdit.Visible = false;
+                buttonDelete.Visible = false;
+                buttonAdd.Visible = true;
+                comboBoxType.Visible = true;
+                textBoxType.Visible = false;
             }
             else
             {
@@ -180,8 +188,9 @@ namespace RestaurantPOS.Forms
                     this.richTextBoxDescription.Text);
 
                 MessageBox.Show("New Menu Item created.");
+                this.DialogResult = DialogResult.OK;
                 this.Close();
-                
+
             }
 
             
