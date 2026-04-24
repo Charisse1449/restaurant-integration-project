@@ -1,12 +1,15 @@
-﻿using System;
+﻿using RestaurantPOS.Entities;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using RestaurantPOS.Entities;
+using System.Net.Http;
+using Newtonsoft.Json.Linq;
 
 namespace RestaurantPOS
 {
@@ -26,42 +29,28 @@ namespace RestaurantPOS
         public DataTable LoadTables()
         {
             DataTable result = new DataTable();
-
             result.Columns.Add("Table_ID");
-
-            SqlConnection connection = this.manipulator.GetConnection();
 
             try
             {
-                connection.Open();
-
-                SqlCommand command = this.manipulator.GetCommand();
-
-                command.CommandText = "SELECT Table_ID FROM dbo.[Table] ORDER BY Table_ID ASC";
-
-                SqlDataReader reader = command.ExecuteReader();
-
-                using (reader)
+                using (HttpClient client = new HttpClient())
                 {
-                    while (reader.Read())
+                    string url = "http://127.0.0.1:8000/api/tables";
+                    string json = client.GetStringAsync(url).Result;
+
+                    JArray tables = JArray.Parse(json);
+
+                    foreach (var table in tables)
                     {
-                        int table_ID = Convert.ToInt32(reader["Table_ID"]);
-
                         DataRow row = result.NewRow();
-
-                        row[0] = table_ID;
-
+                        row["Table_ID"] = table["number"].ToString();
                         result.Rows.Add(row);
                     }
                 }
             }
             catch (Exception e)
             {
-                MessageBox.Show(e.ToString());
-            }
-            finally
-            {
-                connection.Close();
+                MessageBox.Show("API Error LoadTables:\n" + e.Message);
             }
 
             return result;
@@ -70,44 +59,33 @@ namespace RestaurantPOS
         public DataTable LoadActiveTables()
         {
             DataTable result = new DataTable();
-
             result.Columns.Add("Table_ID");
-
-            SqlConnection connection = this.manipulator.GetConnection();
 
             try
             {
-                connection.Open();
-
-                SqlCommand command = this.manipulator.GetCommand();
-
-                command.CommandText = "select t.[Table_ID] " +
-                    "from dbo.[Table] t inner join dbo.[Order] o on t.[Table_ID] = o.[Table_ID] " +
-                    "where o.[Status] = 'A' ";
-
-                SqlDataReader reader = command.ExecuteReader();
-
-                using (reader)
+                using (HttpClient client = new HttpClient())
                 {
-                    while (reader.Read())
+                    string url = "http://127.0.0.1:8000/api/tables";
+                    string json = client.GetStringAsync(url).Result;
+
+                    JArray tables = JArray.Parse(json);
+
+                    foreach (var table in tables)
                     {
-                        int table_ID = Convert.ToInt32(reader["Table_ID"]);
+                        string status = table["status"].ToString();
 
-                        DataRow row = result.NewRow();
-
-                        row[0] = table_ID;
-
-                        result.Rows.Add(row);
+                        if (status == "occupied")
+                        {
+                            DataRow row = result.NewRow();
+                            row["Table_ID"] = table["number"].ToString();
+                            result.Rows.Add(row);
+                        }
                     }
                 }
             }
             catch (Exception e)
             {
-                MessageBox.Show(e.ToString());
-            }
-            finally
-            {
-                connection.Close();
+                MessageBox.Show("API Error LoadActiveTables:\n" + e.Message);
             }
 
             return result;
@@ -324,6 +302,7 @@ namespace RestaurantPOS
         public int AddNewOrder(int table_ID, char status, int staffMember_ID)
         {
             SqlConnection connection = this.manipulator.GetConnection();
+
             int order_ID = -1;
 
             try
@@ -332,16 +311,36 @@ namespace RestaurantPOS
 
                 SqlCommand command = this.manipulator.GetCommand();
 
-                command.CommandText =
-                    "INSERT INTO dbo.[Order] ([Table_ID], [Status], [StaffMember_ID]) " +
-                    "VALUES (@Table_ID, @Status, @StaffMember_ID); " +
-                    "SELECT CAST(SCOPE_IDENTITY() AS INT);";
+                command.CommandText = "insert into dbo.[Order] ([Table_ID], [Status], [StaffMember_ID]) " +
+                    "values (@Table_ID, @Status, @StaffMember_ID); " +
+                    "select SCOPE_IDENTITY() as [LastID] ;";
 
-                command.Parameters.AddWithValue("@Table_ID", table_ID);
-                command.Parameters.AddWithValue("@Status", status);
-                command.Parameters.AddWithValue("@StaffMember_ID", staffMember_ID);
+                SqlParameter param = null;
 
-                order_ID = (int)command.ExecuteScalar(); // ✅ MUCH SAFER
+                param = new SqlParameter("@Table_ID", SqlDbType.Int);
+                param.Value = table_ID;
+                command.Parameters.Add(param);
+
+                param = new SqlParameter("@Status", SqlDbType.Char);
+                param.Value = status;
+                command.Parameters.Add(param);
+
+                param = new SqlParameter("@StaffMember_ID", SqlDbType.Int);
+                param.Value = staffMember_ID;
+                command.Parameters.Add(param);
+
+                //command.ExecuteNonQuery();
+
+                SqlDataReader reader = command.ExecuteReader();
+
+                using (reader)
+                {
+                    if (reader.Read())
+                    {
+                        order_ID = Convert.ToInt32(reader["LastID"]);
+                    }
+                }
+
             }
             catch (Exception e)
             {
@@ -1008,7 +1007,7 @@ namespace RestaurantPOS
                     {
                         result = new StaffMember();
 
-                        
+
                         string firstName = Convert.ToString(reader["FirstName"]);
                         string middleName = Convert.ToString(reader["MiddleName"]);
                         string lastName = Convert.ToString(reader["LastName"]);
@@ -1023,7 +1022,7 @@ namespace RestaurantPOS
                         {
                             image = null;
                         }
-                        
+
 
                         result.StaffMember_ID = staffMember_ID;
                         result.FirstName = firstName;
@@ -1058,6 +1057,9 @@ namespace RestaurantPOS
 
                 SqlCommand command = this.manipulator.GetCommand();
 
+                command.CommandText = "select sm.[StaffMember_ID], sm.[FirstName], sm.[MiddleName], sm.[LastName], sm.[DisplayName] " +
+                    "from dbo.[StaffMember] sm inner join dbo.[Order] o on sm.[StaffMember_ID] = o.[StaffMember_ID] " +
+                    "where o.[Order_ID] = @Order_ID ";
                 command.CommandText = "select sm.[StaffMember_ID], sm.[FirstName], sm.[MiddleName], sm.[LastName], sm.[DisplayName]" +
                 "from dbo.[Order] o left join dbo.[StaffMember] sm on sm.[StaffMember_ID] = o.[StaffMember_ID] where o.[Order_ID] = @Order_ID ";
 
@@ -1079,14 +1081,14 @@ namespace RestaurantPOS
                         string middleName = Convert.ToString(reader["MiddleName"]);
                         string lastName = Convert.ToString(reader["LastName"]);
                         string displayName = Convert.ToString(reader["DisplayName"]);
-                        
+
 
                         result.StaffMember_ID = staffMember_ID;
                         result.FirstName = firstName;
                         result.MiddleName = middleName;
                         result.LastName = lastName;
                         result.DisplayName = displayName;
-                      
+
                     }
                 }
             }
@@ -1132,14 +1134,14 @@ namespace RestaurantPOS
                 param = new SqlParameter("@DisplayName", SqlDbType.VarChar);
                 param.Value = displayName;
                 command.Parameters.Add(param);
-                
-                
-                
+
+
+
                 param = new SqlParameter("@Image", SqlDbType.VarBinary);
                 param.Value = image;
                 command.Parameters.Add(param);
-                
-                
+
+
 
                 command.ExecuteNonQuery();
             }
@@ -1246,7 +1248,7 @@ namespace RestaurantPOS
             DataTable result = new DataTable();
 
             result.Columns.Add("Order_ID");
-            
+
             SqlConnection connection = this.manipulator.GetConnection();
 
             try
@@ -1271,11 +1273,11 @@ namespace RestaurantPOS
                     while (reader.Read())
                     {
                         int order_ID = Convert.ToInt32(reader["Order_ID"]);
-                        
+
                         DataRow row = result.NewRow();
 
                         row[0] = order_ID;
-                        
+
                         result.Rows.Add(row);
                     }
                 }
@@ -1317,7 +1319,7 @@ namespace RestaurantPOS
                 SqlParameter param = null;
 
                 param = new SqlParameter("@Param", SqlDbType.VarChar);
-                param.Value = "%"+name+"%";
+                param.Value = "%" + name + "%";
                 command.Parameters.Add(param);
 
                 SqlDataReader reader = command.ExecuteReader();

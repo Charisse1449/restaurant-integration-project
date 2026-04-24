@@ -78,7 +78,7 @@ namespace RestaurantPOS.Forms
             else //view, archiveView, viewWithOrderID 
             {
                 textBoxTableNumber.Text = Convert.ToString(table_id);
-  
+
                 Configurator configurator = new Configurator();
 
                 DataTable dTableActiveOrder = new DataTable();
@@ -103,7 +103,7 @@ namespace RestaurantPOS.Forms
                     Convert.ToString(dTableActiveOrder.Rows[i].ItemArray[4]), //price
                     Convert.ToString(subtotal)}; //subtotal
                     this.dataGridViewOrderMenuItems.Rows.Add(row);
-                } 
+                }
 
                 if (dTableActiveOrder.Rows.Count == 0)
                 {
@@ -128,8 +128,8 @@ namespace RestaurantPOS.Forms
                     textBoxStaffMember.Visible = true;
                     textBoxStaffMember.Text = staffMember.DisplayName;
 
-                    textBoxTotal.ReadOnly= true;
-                    
+                    textBoxTotal.ReadOnly = true;
+
                     textBoxTotal_Click(e, e);
 
                 }
@@ -139,9 +139,9 @@ namespace RestaurantPOS.Forms
 
                 buttonDelete.Visible = true;
 
-                if(action == "archiveView")
+                if (action == "archiveView")
                 {
-                    
+
                     buttonEdit.Visible = false;
                     buttonCompleteOrder.Visible = false;
                     buttonDelete.Visible = false;
@@ -152,22 +152,22 @@ namespace RestaurantPOS.Forms
 
             buttonSave.Visible = false;
             //buttonCancel.Visible = false;
-            
 
-        } 
+
+        }
 
         private void buttonEdit_Click_1(object sender, EventArgs e)
         {
-            this.dataGridViewOrderMenuItems.AllowUserToAddRows = true;
-            this.dataGridViewOrderMenuItems.AllowUserToDeleteRows = true;
-            this.dataGridViewOrderMenuItems.ReadOnly = false;
+            dataGridViewOrderMenuItems.AllowUserToAddRows = true;
+            dataGridViewOrderMenuItems.AllowUserToDeleteRows = true;
+            dataGridViewOrderMenuItems.ReadOnly = false;
 
             buttonSave.Visible = true;
             buttonEdit.Visible = false;
 
             textBoxTableNumber.Visible = false;
             comboBoxTableNumber.Visible = true;
-            comboBoxTableNumber.Text = Convert.ToString(table_id);
+            comboBoxTableNumber.Text = table_id.ToString();
 
             textBoxStaffMember.Visible = false;
             comboBoxStaffMember.Visible = true;
@@ -179,142 +179,166 @@ namespace RestaurantPOS.Forms
             comboBoxStaffMember.ValueMember = "staffMember_ID";
             comboBoxStaffMember.DisplayMember = "displayName";
 
-            // ✅ SAFE NULL HANDLING (FIXED PART)
+            // ✅ SAFE: only access if not null
             if (staffMember != null)
             {
                 comboBoxStaffMember.SelectedValue = staffMember.StaffMember_ID;
             }
             else
             {
-                comboBoxStaffMember.SelectedIndex = -1;
-                MessageBox.Show("No staff assigned to this order.");
+                comboBoxStaffMember.SelectedIndex = -1; // just leave it empty
             }
 
+            // ❗ avoid duplicate event binding
+            dataGridViewOrderMenuItems.CellClick -= dataGridViewOrderMenuItems_CellClick;
             dataGridViewOrderMenuItems.CellClick += dataGridViewOrderMenuItems_CellClick;
         }
 
-        //private void buttonCancel_Click(object sender, EventArgs e)
-        //{
-        //    this.dataGridViewOrderMenuItems.AllowUserToAddRows = false;
-        //    this.dataGridViewOrderMenuItems.AllowUserToDeleteRows = false;
-        //    this.dataGridViewOrderMenuItems.ReadOnly = true;
-        //    buttonSave.Visible = false;
-        //    //buttonCancel.Visible = false;
-        //    buttonEdit.Visible = true;
-        //    dataGridViewOrderMenuItems.Update();
-        //    textBoxTableNumber.Visible = true;
-        //    comboBoxTableNumber.Visible = false;
-        //}
-
-
-        private void buttonSave_Click(object sender, EventArgs e)//Save after editing
+        private void buttonSave_Click(object sender, EventArgs e)
         {
-
             bool mistake = this.CellValidating(dataGridViewOrderMenuItems, comboBoxTableNumber);
 
             if (mistake)
                 return;
 
+            if (order_id <= 0)
+            {
+                MessageBox.Show("Invalid order. Cannot save.");
+                return;
+            }
+
+            if (comboBoxTableNumber.SelectedValue == null)
+            {
+                MessageBox.Show("Please select a table.");
+                return;
+            }
+
             try
             {
                 Configurator configurator = new Configurator();
 
-                // ✅ FIXED: correct table ID
+                // ✅ FIXED
                 int newTableID = Convert.ToInt32(comboBoxTableNumber.SelectedValue);
 
-                // update order
                 configurator.UpdateOrder(order_id, newTableID, 'A');
 
-                // update items
                 configurator.DeleteOrderMenuItem(order_id);
 
-                for (int i = 0; i < dataGridViewOrderMenuItems.Rows.Count - 1; i++)
+                for (int i = 0; i < dataGridViewOrderMenuItems.RowCount - 1; i++)
                 {
                     var row = dataGridViewOrderMenuItems.Rows[i];
 
                     if (row.Cells[2].Value == null || row.Cells[1].Value == null)
                         continue;
 
-                    int menuItem_ID = Convert.ToInt32(row.Cells[2].Value);
-                    int quantity = Convert.ToInt32(row.Cells[1].Value);
+                    int newMenuItem_ID = Convert.ToInt32(row.Cells[2].Value);
+                    int newQuantity = Convert.ToInt32(row.Cells[1].Value);
 
-                    configurator.AddNewOrderMenuItem(order_id, menuItem_ID, quantity);
+                    configurator.AddNewOrderMenuItem(order_id, newMenuItem_ID, newQuantity);
                 }
 
-                dataGridViewOrderMenuItems.AllowUserToDeleteRows = false;
-                dataGridViewOrderMenuItems.AllowUserToAddRows = false;
-                dataGridViewOrderMenuItems.ReadOnly = true;
+                MessageBox.Show("Order successfully updated!");
 
-                buttonSave.Visible = false;
-                buttonEdit.Visible = true;
-
-                textBoxTableNumber.Visible = true;
-                comboBoxTableNumber.Visible = false;
-
-                // optional refresh
                 this.Close();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Save failed: " + ex.Message);
+                MessageBox.Show("Save failed:\n" + ex.Message);
             }
-
         }
 
-        private void buttonAdd_Click(object sender, EventArgs e)//Save after creating a new order
+        private void buttonAdd_Click(object sender, EventArgs e)
         {
             bool mistake = this.CellValidating(dataGridViewOrderMenuItems, comboBoxTableNumber);
-            
-            //bool mistake = false;
-            if (mistake)
+            if (mistake) return;
+
+            Configurator configurator = new Configurator();
+
+            int newTable_ID = -1;
+
+            // ✅ FIX: proper table selection
+            if (action == "addWithTableID")
             {
+                newTable_ID = table_id;
+            }
+            else if (action == "add")
+            {
+                if (comboBoxTableNumber.SelectedValue == null)
+                {
+                    MessageBox.Show("Please select a valid table.");
+                    return;
+                }
+
+                newTable_ID = Convert.ToInt32(comboBoxTableNumber.SelectedValue);
+            }
+
+            // 🔒 extra safety
+            if (newTable_ID <= 0)
+            {
+                MessageBox.Show("Invalid table selected.");
                 return;
             }
 
-            else if (!mistake)
+            // ✅ staff validation
+            if (comboBoxStaffMember.SelectedValue == null)
             {
-
-                Configurator configurator = new Configurator();
-
-                //add new order
-                int newTable_ID = -1;
-
-                if(action == "addWithTableID")
-                {
-                    newTable_ID = table_id;
-
-                } else if (action == "add")
-                {
-                    newTable_ID = Convert.ToInt32(comboBoxTableNumber.SelectedIndex) + 1;
-                }
-
-                int newStaffMember_ID = Convert.ToInt32(comboBoxStaffMember.SelectedValue);
-
-                int newOrder_ID = configurator.AddNewOrder(Convert.ToInt32(newTable_ID), 'A', newStaffMember_ID);
-
-
-                //add orderMenuItems
-                for (int i = 0; i < dataGridViewOrderMenuItems.RowCount - 1; i++)
-                {
-                    int newMenuItem_ID = Convert.ToInt32(dataGridViewOrderMenuItems.Rows[i].Cells[2].Value);
-                    int newQuantity = Convert.ToInt32(dataGridViewOrderMenuItems.Rows[i].Cells[1].Value);
-                    configurator.AddNewOrderMenuItem(newOrder_ID, newMenuItem_ID, newQuantity);
-                }
-
-                MessageBox.Show("Succesfully added! Order number: " + Convert.ToString(newOrder_ID));
-
-                this.dataGridViewOrderMenuItems.AllowUserToDeleteRows = false;
-                this.dataGridViewOrderMenuItems.AllowUserToAddRows = false;
-                this.dataGridViewOrderMenuItems.ReadOnly = true;
-                buttonSave.Visible = false;
-                //buttonCancel.Visible = false;
-                buttonEdit.Visible = true;
-                textBoxTableNumber.Visible = true;
-                comboBoxTableNumber.Visible = false;
-                this.Close();
+                MessageBox.Show("Please select a staff member.");
+                return;
             }
 
+            int newStaffMember_ID = Convert.ToInt32(comboBoxStaffMember.SelectedValue);
 
+            // ✅ create order FIRST
+            int newOrder_ID = configurator.AddNewOrder(newTable_ID, 'A', newStaffMember_ID);
+
+            if (newOrder_ID <= 0)
+            {
+                MessageBox.Show("Failed to create order.");
+                return;
+            }
+
+            // ✅ NOW safe to insert items
+            bool hasItems = false;
+
+            foreach (DataGridViewRow row in dataGridViewOrderMenuItems.Rows)
+            {
+                if (row.IsNewRow) continue;
+
+                if (row.Cells[2].Value == null || row.Cells[1].Value == null)
+                    continue;
+
+                if (!int.TryParse(row.Cells[2].Value.ToString(), out int menuItem_ID))
+                    continue;
+
+                if (!int.TryParse(row.Cells[1].Value.ToString(), out int quantity))
+                    continue;
+
+                if (quantity <= 0)
+                    continue;
+
+                configurator.AddNewOrderMenuItem(newOrder_ID, menuItem_ID, quantity);
+                hasItems = true;
+            }
+
+            if (!hasItems)
+            {
+                MessageBox.Show("Please add at least one valid menu item.");
+                return;
+            }
+
+            MessageBox.Show("Successfully added! Order number: " + newOrder_ID);
+
+            dataGridViewOrderMenuItems.AllowUserToDeleteRows = false;
+            dataGridViewOrderMenuItems.AllowUserToAddRows = false;
+            dataGridViewOrderMenuItems.ReadOnly = true;
+
+            buttonSave.Visible = false;
+            buttonEdit.Visible = true;
+
+            textBoxTableNumber.Visible = true;
+            comboBoxTableNumber.Visible = false;
+
+            this.Close();
         }
 
         private bool CellValidating(DataGridView dataGridView, ComboBox comboBoxTable)
@@ -325,7 +349,7 @@ namespace RestaurantPOS.Forms
             bool noName = false;
             bool wholeNumber = false;
             int difference = 1;
-            if(dataGridView.RowCount == 1)
+            if (dataGridView.RowCount == 1)
             {
                 difference = 0;
             }
@@ -357,20 +381,20 @@ namespace RestaurantPOS.Forms
                 MessageBox.Show("Please select an item from the Menu.");
             }
 
-            if (action == "add" && comboBoxTableNumber.SelectedValue == null)
+            if (action == "add" && comboBoxTable.SelectedItem == null)
             {
                 MessageBox.Show("Choose a table");
                 mistake = true;
             }
 
-                return mistake;
+            return mistake;
         }
 
-        
+
 
         private void dataGridViewOrderMenuItems_CellClick(object sender, DataGridViewCellEventArgs e)
         {
-            if(dataGridViewOrderMenuItems.CurrentCell.ColumnIndex == 0)
+            if (dataGridViewOrderMenuItems.CurrentCell.ColumnIndex == 0)
             {
                 MenuForm fMenuForm = new MenuForm(2, "add");
                 fMenuForm.ShowDialog();
@@ -380,22 +404,22 @@ namespace RestaurantPOS.Forms
                 Configurator configurator = new Configurator();
                 Entities.MenuItem menuItem = configurator.LoadMenuItemByName(fMenuForm.menuItemName);
                 dataGridViewOrderMenuItems.CurrentRow.Cells[3].Value = menuItem.Price;
-                
+
             }
-            if(dataGridViewOrderMenuItems.CurrentCell.ColumnIndex == 4)
+            if (dataGridViewOrderMenuItems.CurrentCell.ColumnIndex == 4)
             {
                 double subtotal = Convert.ToDouble(dataGridViewOrderMenuItems.CurrentRow.Cells[3].Value) * Convert.ToInt32(dataGridViewOrderMenuItems.CurrentRow.Cells[1].Value);
                 dataGridViewOrderMenuItems.CurrentRow.Cells[4].Value = subtotal;
             }
 
-            
+
 
         }
 
         private void buttonExit_Click(object sender, EventArgs e)
         {
             this.Close();
-            
+
         }
 
         private void buttonDelete_Click(object sender, EventArgs e)
@@ -418,58 +442,19 @@ namespace RestaurantPOS.Forms
 
         private void buttonCompleteOrder_Click(object sender, EventArgs e)
         {
-            // 🔒 VALIDATION CHECK FIRST
-            if (dataGridViewOrderMenuItems.Rows.Count <= 1)
-            {
-                MessageBox.Show("Cannot complete order. No items found.");
-                return;
-            }
-
-            for (int i = 0; i < dataGridViewOrderMenuItems.Rows.Count - 1; i++)
-            {
-                var name = dataGridViewOrderMenuItems.Rows[i].Cells[0].Value;
-                var qty = dataGridViewOrderMenuItems.Rows[i].Cells[1].Value;
-
-                if (name == null || string.IsNullOrWhiteSpace(name.ToString()))
-                {
-                    MessageBox.Show("Cannot complete order. Some menu items are missing.");
-                    return;
-                }
-
-                if (qty == null || !int.TryParse(qty.ToString(), out int q) || q <= 0)
-                {
-                    MessageBox.Show("Cannot complete order. Invalid quantity found.");
-                    return;
-                }
-            }
-
-            if (order_id <= 0)
-            {
-                MessageBox.Show("Invalid order ID.");
-                return;
-            }
-
-            // 🔒 CONFIRMATION
-            DialogResult res = MessageBox.Show(
-                "Are you sure you want to complete this order?",
-                "Confirmation",
-                MessageBoxButtons.YesNo
-            );
-
+            DialogResult res = MessageBox.Show("Are you sure you want to complete this order?", "Confirmation", MessageBoxButtons.YesNo);
             if (res == DialogResult.Yes)
             {
-                try
-                {
-                    Configurator configurator = new Configurator();
-                    configurator.FinishOrder(order_id);
+                Configurator configurator = new Configurator();
+                configurator.FinishOrder(order_id);
 
-                    MessageBox.Show("Successfully finished.");
-                    this.Close();
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Error completing order: " + ex.Message);
-                }
+                MessageBox.Show("Succesfully finished.");
+                this.Close();
+
+            }
+            if (res == DialogResult.No)
+            {
+
             }
 
 
@@ -483,7 +468,7 @@ namespace RestaurantPOS.Forms
             for (int i = 0; i < dataGridViewOrderMenuItems.RowCount; i++)
             {
 
-                if(dataGridViewOrderMenuItems.Rows[i].Cells[1].Value == null)
+                if (dataGridViewOrderMenuItems.Rows[i].Cells[1].Value == null)
                 {
                     subtotal = 0;
                 }
@@ -493,7 +478,7 @@ namespace RestaurantPOS.Forms
                     dataGridViewOrderMenuItems.Rows[i].Cells[4].Value = subtotal;
                     total += subtotal;
                 }
-                
+
             }
 
             textBoxTotal.Text = Convert.ToString(total);
