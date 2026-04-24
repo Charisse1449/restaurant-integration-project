@@ -181,20 +181,22 @@ namespace RestaurantPOS.Forms
             else
             {
 
-                configurator.CreateMenuItem(this.textBoxName.Text,
+                bool saved = configurator.CreateMenuItem(
+                    this.textBoxName.Text,
                     Convert.ToString(this.comboBoxType.SelectedItem),
                     Convert.ToDouble(this.textBoxPrice.Text),
                     this.textBoxQuantity.Text,
-                    this.richTextBoxDescription.Text);
+                    this.richTextBoxDescription.Text
+                );
 
-                MessageBox.Show("New Menu Item created.");
-                this.DialogResult = DialogResult.OK;
-                this.Close();
+                if (saved)
+                {
+                    MessageBox.Show("New Menu Item created.");
+                    this.DialogResult = DialogResult.OK;
+                    this.Close();
+                }
 
             }
-
-            
-            
         }
 
         private void comboBoxType_SelectedIndexChanged(object sender, EventArgs e)

@@ -162,8 +162,8 @@ namespace RestaurantPOS
         {
             DataTable result = new DataTable();
 
-            result.Columns.Add("Order_ID");
-            result.Columns.Add("Table_ID");
+            result.Columns.Add("Order_ID", typeof(int));
+            result.Columns.Add("Table_ID", typeof(int));
 
             try
             {
@@ -180,22 +180,18 @@ namespace RestaurantPOS
 
                         bool include = false;
 
-                        // Old desktop: A = active, C = closed
-                        // Laravel: new/preparing/ready/completed
                         if (status == 'A' && apiStatus != "completed")
-                        {
                             include = true;
-                        }
                         else if (status == 'C' && apiStatus == "completed")
-                        {
                             include = true;
-                        }
 
                         if (include)
                         {
                             DataRow row = result.NewRow();
-                            row["Order_ID"] = order["id"].ToString();
-                            row["Table_ID"] = order["table_number"]?.ToString();
+
+                            row["Order_ID"] = Convert.ToInt32(order["id"]);
+                            row["Table_ID"] = Convert.ToInt32(order["table_number"]);
+
                             result.Rows.Add(row);
                         }
                     }
@@ -220,33 +216,80 @@ namespace RestaurantPOS
             return new DataTable(); // TEMP
         }
 
-        public int AddNewOrder(int table_ID, char status, int staffMember_ID)
+        public int AddNewOrder(int table_ID, char status, int staffMember_ID, DataGridView dataGridViewOrderMenuItems)
         {
+            MessageBox.Show("INSIDE NEW AddNewOrder");
+
             try
             {
                 using (HttpClient client = new HttpClient())
                 {
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    client.DefaultRequestHeaders.Accept.Add(
+                        new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json")
+                    );
+
+                    var items = new List<object>();
+                    double subtotal = 0;
+
+                    foreach (DataGridViewRow row in dataGridViewOrderMenuItems.Rows)
+                    {
+                        if (row.IsNewRow) continue;
+                        if (row.Cells[2].Value == null || row.Cells[1].Value == null) continue;
+
+                        int recipeId = Convert.ToInt32(row.Cells[2].Value);
+                        int quantity = Convert.ToInt32(row.Cells[1].Value);
+                        string name = Convert.ToString(row.Cells[0].Value);
+                        double price = Convert.ToDouble(row.Cells[3].Value);
+                        double total = price * quantity;
+
+                        subtotal += total;
+
+                        items.Add(new
+                        {
+                            recipe_id = recipeId,
+                            name = name,
+                            price = price,
+                            quantity = quantity,
+                            total = total,
+                            modifications = new object[] { },
+                            notes = ""
+                        });
+                    }
+
                     var data = new
                     {
                         type = "dine-in",
                         table_number = table_ID,
-                        subtotal = 0,
+                        subtotal = subtotal,
                         tax = 0,
                         delivery_fee = 0,
-                        total = 0,
-                        status = "new"
+                        total = subtotal,
+                        status = "new",
+                        notes = new object[] { },
+                        items = items
                     };
 
                     string jsonData = JsonConvert.SerializeObject(data);
                     StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
 
                     var response = client.PostAsync("http://127.0.0.1:8000/api/orders", content).Result;
-
                     string result = response.Content.ReadAsStringAsync().Result;
+
+                    MessageBox.Show("ORDER STATUS: " + (int)response.StatusCode + "\n\nRESPONSE:\n" + result);
+
+                    if (!response.IsSuccessStatusCode)
+                        return -1;
 
                     JObject obj = JObject.Parse(result);
 
-                    return (int)obj["id"];
+                    if (obj["data"] != null && obj["data"]["id"] != null)
+                        return Convert.ToInt32(obj["data"]["id"]);
+
+                    if (obj["id"] != null)
+                        return Convert.ToInt32(obj["id"]);
+
+                    return -1;
                 }
             }
             catch (Exception ex)
@@ -392,39 +435,41 @@ namespace RestaurantPOS
 
         public void FinishOrder(int order_ID)
         {
-            SqlConnection connection = this.manipulator.GetConnection();
-
             try
             {
-                connection.Open();
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    client.DefaultRequestHeaders.Accept.Add(
+                        new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json")
+                    );
 
-                SqlCommand command = this.manipulator.GetCommand();
+                    var request = new HttpRequestMessage(
+                        new HttpMethod("PATCH"),
+                        $"http://127.0.0.1:8000/api/orders/{order_ID}/complete"
+                    );
 
-                command.CommandText = "update dbo.[Order] " +
-                                        "set [Status] = 'C' " +
-                                        "where [Order_ID] = @Order_ID;";
+                    request.Content = new StringContent("", Encoding.UTF8, "application/json");
 
-                SqlParameter param = null;
+                    var response = client.SendAsync(request).Result;
 
-                param = new SqlParameter("@Order_ID", SqlDbType.Int);
-                param.Value = order_ID;
-                command.Parameters.Add(param);
+                    string result = response.Content.ReadAsStringAsync().Result;
 
-                command.ExecuteNonQuery();
-
-
+                    if (response.IsSuccessStatusCode)
+                    {
+                        MessageBox.Show("Order completed successfully.");
+                    }
+                    else
+                    {
+                        MessageBox.Show("API Error FinishOrder:\n" + response.StatusCode + "\n" + result);
+                    }
+                }
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                MessageBox.Show(e.ToString());
+                MessageBox.Show("API Error FinishOrder:\n" + ex.Message);
             }
-            finally
-            {
-                connection.Close();
-            }
-
         }
-
         //login
 
         public int CheckLoginAndRole(string username, string password)
@@ -552,11 +597,10 @@ namespace RestaurantPOS
 
                     foreach (var recipe in recipes)
                     {
-                        string category = recipe["category"]?.ToString();
+                        string category = recipe["category"]?.ToString()?.Trim() ?? "";
+                        string requestedType = type?.Trim() ?? "";
 
-                        // If your old C# menu type does not match Laravel category,
-                        // still show all for now.
-                        if (string.IsNullOrEmpty(type) || category == type)
+                        if (string.Equals(category, requestedType, StringComparison.OrdinalIgnoreCase))
                         {
                             DataRow row = result.NewRow();
                             row["MenuItem_ID"] = recipe["id"].ToString();
@@ -677,11 +721,13 @@ namespace RestaurantPOS
         /// <param name="price"></param>
         /// <param name="quantity"></param>
         /// <param name="description"></param>
-        public void CreateMenuItem(string name, string type, double price, string quantity, string description)
+        public bool CreateMenuItem(string name, string type, double price, string quantity, string description)
         {
-            using (HttpClient client = new HttpClient())
+            MessageBox.Show("INSIDE CreateMenuItem");
+
+            try
             {
-                try
+                using (HttpClient client = new HttpClient())
                 {
                     var data = new
                     {
@@ -692,8 +738,14 @@ namespace RestaurantPOS
                         prep_time = 10,
                         cook_time = 10,
                         difficulty = "easy",
-                        ingredients = new string[] { },
+                        allergens = new string[] { },
+                        tags = new string[] { },
+                        ingredients = new object[]
+                        {
+                    new { name = "Test", quantity = "1", unit = "pcs" }
+                        },
                         instructions = description,
+                        notes = "",
                         is_active = true
                     };
 
@@ -703,21 +755,20 @@ namespace RestaurantPOS
                     var response = client.PostAsync("http://127.0.0.1:8000/api/recipes", content).Result;
                     string result = response.Content.ReadAsStringAsync().Result;
 
-                    MessageBox.Show("Status: " + response.StatusCode + "\n" + result);
+                    // 🚨 ALWAYS SHOW RESPONSE
+                    MessageBox.Show(
+                        "STATUS: " + (int)response.StatusCode +
+                        "\nSUCCESS: " + response.IsSuccessStatusCode +
+                        "\n\nRESPONSE:\n" + result
+                    );
 
-                    if (response.IsSuccessStatusCode)
-                    {
-                        MessageBox.Show("Menu item added successfully!");
-                    }
-                    else
-                    {
-                        MessageBox.Show("API Error: " + response.StatusCode + "\n" + result);
-                    }
+                    return response.IsSuccessStatusCode;
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("API Error CreateMenuItem: " + ex.Message);
-                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("API Error:\n" + ex.Message);
+                return false;
             }
         }
 

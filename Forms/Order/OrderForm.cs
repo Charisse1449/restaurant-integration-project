@@ -42,11 +42,18 @@ namespace RestaurantPOS.Forms
 
                 comboBoxStaffMember.Visible = true;
                 comboBoxStaffMember.Enabled = true;
+
                 Configurator configurator = new Configurator();
+
+                DataTable dTableTables = configurator.LoadTables();
+                this.comboBoxTableNumber.DataSource = dTableTables;
+                this.comboBoxTableNumber.DisplayMember = "Table_ID";
+                this.comboBoxTableNumber.ValueMember = "Table_ID";
+
                 DataTable dTableStaffMembers = configurator.LoadStaffMembers();
                 this.comboBoxStaffMember.DataSource = dTableStaffMembers;
-                this.comboBoxStaffMember.ValueMember = "staffMember_ID";
                 this.comboBoxStaffMember.DisplayMember = "displayName";
+                this.comboBoxStaffMember.ValueMember = "staffMember_ID";
 
                 dataGridViewOrderMenuItems.CellClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dataGridViewOrderMenuItems_CellClick);
             }
@@ -263,13 +270,15 @@ namespace RestaurantPOS.Forms
             }
             else if (action == "add")
             {
-                if (comboBoxTableNumber.SelectedValue == null)
+                if (comboBoxTableNumber.SelectedValue == null && string.IsNullOrWhiteSpace(comboBoxTableNumber.Text))
                 {
                     MessageBox.Show("Please select a valid table.");
                     return;
                 }
 
-                newTable_ID = Convert.ToInt32(comboBoxTableNumber.SelectedValue);
+                newTable_ID = comboBoxTableNumber.SelectedValue != null
+                    ? Convert.ToInt32(comboBoxTableNumber.SelectedValue)
+                    : Convert.ToInt32(comboBoxTableNumber.Text);
             }
 
             // 🔒 extra safety
@@ -289,13 +298,16 @@ namespace RestaurantPOS.Forms
             int newStaffMember_ID = Convert.ToInt32(comboBoxStaffMember.SelectedValue);
 
             // ✅ create order FIRST
-            int newOrder_ID = configurator.AddNewOrder(newTable_ID, 'A', newStaffMember_ID);
+            int newOrder_ID = configurator.AddNewOrder(newTable_ID, 'A', newStaffMember_ID, dataGridViewOrderMenuItems);
 
             if (newOrder_ID <= 0)
             {
                 MessageBox.Show("Failed to create order.");
                 return;
             }
+
+            // ✅ VERY IMPORTANT FIX
+            this.order_id = newOrder_ID;
 
             // ✅ NOW safe to insert items
             bool hasItems = false;
@@ -316,7 +328,7 @@ namespace RestaurantPOS.Forms
                 if (quantity <= 0)
                     continue;
 
-                configurator.AddNewOrderMenuItem(newOrder_ID, menuItem_ID, quantity);
+                //configurator.AddNewOrderMenuItem(newOrder_ID, menuItem_ID, quantity);
                 hasItems = true;
             }
 
