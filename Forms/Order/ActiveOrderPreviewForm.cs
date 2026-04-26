@@ -26,25 +26,34 @@ namespace RestaurantPOS.Forms
 
         private void ActiveOrderPreview_Load(object sender, EventArgs e)
         {
-
-
             Configurator configurator = new Configurator();
+
+            DataTable dTableOrders = configurator.LoadOrders('A');
+
+            foreach (DataRow row in dTableOrders.Rows)
+            {
+                if (Convert.ToInt32(row["Order_ID"]) == order_ID)
+                {
+                    table_id = Convert.ToInt32(row["Table_ID"]);
+                    break;
+                }
+            }
 
             DataTable dTableActiveOrder = configurator.LoadOrderDetailsByOrderID(order_ID);
 
-            
             for (int i = 0; i < dTableActiveOrder.Rows.Count; i++)
             {
-                string[] row = {Convert.ToString(dTableActiveOrder.Rows[i].ItemArray[2]), //
-                    Convert.ToString(dTableActiveOrder.Rows[i].ItemArray[3])}; //
-                this.dataGridView1.Rows.Add(row);
+                string[] itemRow =
+                {
+            Convert.ToString(dTableActiveOrder.Rows[i].ItemArray[2]),
+            Convert.ToString(dTableActiveOrder.Rows[i].ItemArray[3])
+        };
 
-                table_id = Convert.ToInt32(dTableActiveOrder.Rows[i].ItemArray[1]);
+                this.dataGridView1.Rows.Add(itemRow);
             }
 
-            labelTable.Text += " " + Convert.ToString(table_id);
-            labelOrder.Text += " " + Convert.ToString(order_ID);
-
+            labelTable.Text += " " + table_id.ToString();
+            labelOrder.Text += " " + order_ID.ToString();
         }
 
         private void labelTable_Click(object sender, EventArgs e)

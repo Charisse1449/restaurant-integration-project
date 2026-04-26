@@ -214,7 +214,17 @@ namespace RestaurantPOS.Forms
                 return;
             }
 
-            if (comboBoxTableNumber.SelectedValue == null)
+            int newTableID;
+
+            if (comboBoxTableNumber.SelectedValue != null)
+            {
+                newTableID = Convert.ToInt32(comboBoxTableNumber.SelectedValue);
+            }
+            else if (!string.IsNullOrWhiteSpace(comboBoxTableNumber.Text))
+            {
+                newTableID = Convert.ToInt32(comboBoxTableNumber.Text);
+            }
+            else
             {
                 MessageBox.Show("Please select a table.");
                 return;
@@ -224,12 +234,12 @@ namespace RestaurantPOS.Forms
             {
                 Configurator configurator = new Configurator();
 
-                // ✅ FIXED
-                int newTableID = Convert.ToInt32(comboBoxTableNumber.SelectedValue);
-
                 configurator.UpdateOrder(order_id, newTableID, 'A');
 
-                configurator.DeleteOrderMenuItem(order_id);
+                MessageBox.Show("Order successfully updated!");
+                this.Close();
+
+                //configurator.DeleteOrderMenuItem(order_id);
 
                 for (int i = 0; i < dataGridViewOrderMenuItems.RowCount - 1; i++)
                 {
@@ -241,11 +251,10 @@ namespace RestaurantPOS.Forms
                     int newMenuItem_ID = Convert.ToInt32(row.Cells[2].Value);
                     int newQuantity = Convert.ToInt32(row.Cells[1].Value);
 
-                    configurator.AddNewOrderMenuItem(order_id, newMenuItem_ID, newQuantity);
+                    //configurator.AddNewOrderMenuItem(order_id, newMenuItem_ID, newQuantity);
                 }
 
                 MessageBox.Show("Order successfully updated!");
-
                 this.Close();
             }
             catch (Exception ex)
@@ -281,10 +290,18 @@ namespace RestaurantPOS.Forms
                     : Convert.ToInt32(comboBoxTableNumber.Text);
             }
 
+            
             // 🔒 extra safety
             if (newTable_ID <= 0)
             {
                 MessageBox.Show("Invalid table selected.");
+                return;
+            }
+
+            // ✅ ADD IT HERE
+            if (configurator.HasActiveOrderForTable(newTable_ID))
+            {
+                MessageBox.Show("This table already has an active order. Please edit the existing order instead.");
                 return;
             }
 
@@ -393,10 +410,13 @@ namespace RestaurantPOS.Forms
                 MessageBox.Show("Please select an item from the Menu.");
             }
 
-            if (action == "add" && comboBoxTable.SelectedItem == null)
+            if (action == "add")
             {
-                MessageBox.Show("Choose a table");
-                mistake = true;
+                if (comboBoxTable.SelectedValue == null && string.IsNullOrWhiteSpace(comboBoxTable.Text))
+                {
+                    MessageBox.Show("Please select a table.");
+                    mistake = true;
+                }
             }
 
             return mistake;
@@ -436,19 +456,22 @@ namespace RestaurantPOS.Forms
 
         private void buttonDelete_Click(object sender, EventArgs e)
         {
-            DialogResult res = MessageBox.Show("Are you sure you want to delete?", "Confirmation", MessageBoxButtons.YesNo);
+            DialogResult res = MessageBox.Show(
+                "Are you sure you want to delete this order?",
+                "Confirmation",
+                MessageBoxButtons.YesNo
+            );
+
             if (res == DialogResult.Yes)
             {
                 Configurator configurator = new Configurator();
-                configurator.DeleteActiveOrder(order_id);
 
-                MessageBox.Show("Succesfully deleted.");
-                this.Close();
+                bool deleted = configurator.DeleteActiveOrder(order_id);
 
-            }
-            if (res == DialogResult.No)
-            {
-
+                if (deleted)
+                {
+                    this.Close();
+                }
             }
         }
 

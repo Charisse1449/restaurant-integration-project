@@ -141,6 +141,20 @@ namespace RestaurantPOS
             return result;
         }
 
+        private DataTable CreateOrderDetailsTable()
+        {
+            DataTable result = new DataTable();
+
+            result.Columns.Add("Order_ID", typeof(int));
+            result.Columns.Add("Table_ID", typeof(int));
+            result.Columns.Add("Name", typeof(string));
+            result.Columns.Add("Quantity", typeof(int));
+            result.Columns.Add("Price", typeof(double));
+            result.Columns.Add("MenuItem_ID", typeof(int));
+
+            return result;
+        }
+
         //orders
 
         /// <summary>
@@ -148,9 +162,36 @@ namespace RestaurantPOS
         /// </summary>
         /// <param name="id"></param>
         /// <returns></returns>
-        public DataTable LoadOrderDetailsByTableID(int? id)
+        public DataTable LoadOrderDetailsByTableID(int? tableNumber)
         {
-            return new DataTable(); // TEMP
+            DataTable result = CreateOrderDetailsTable();
+
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    string json = client.GetStringAsync("http://127.0.0.1:8000/api/orders").Result;
+                    JArray orders = ExtractArrayFromApiResponse(json);
+
+                    foreach (var order in orders)
+                    {
+                        int apiTable = Convert.ToInt32(order["table_number"]);
+                        string status = order["status"]?.ToString();
+
+                        if (apiTable == tableNumber && status != "completed")
+                        {
+                            int orderId = Convert.ToInt32(order["id"]);
+                            return LoadOrderDetailsByOrderID(orderId);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("API Error LoadOrderDetailsByTableID:\n" + ex.Message);
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -213,12 +254,53 @@ namespace RestaurantPOS
 
         public DataTable LoadOrderDetailsByOrderID(int id)
         {
-            return new DataTable(); // TEMP
+            DataTable result = CreateOrderDetailsTable();
+
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    string json = client.GetStringAsync($"http://127.0.0.1:8000/api/orders/{id}").Result;
+                    JToken token = JToken.Parse(json);
+
+                    JToken order = token["data"] ?? token;
+
+                    JArray items = null;
+
+                    if (order["order_items"] != null)
+                        items = (JArray)order["order_items"];
+                    else if (order["items"] != null)
+                        items = (JArray)order["items"];
+
+                    if (items == null)
+                        return result;
+
+                    foreach (var item in items)
+                    {
+                        DataRow row = result.NewRow();
+
+                        row["Order_ID"] = Convert.ToInt32(order["id"]);
+                        row["Table_ID"] = Convert.ToInt32(order["table_number"]);
+                        row["Name"] = item["name"]?.ToString();
+                        row["Quantity"] = Convert.ToInt32(item["quantity"]);
+                        row["Price"] = Convert.ToDouble(item["price"]);
+                        row["MenuItem_ID"] = Convert.ToInt32(item["recipe_id"]);
+
+                        result.Rows.Add(row);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("API Error LoadOrderDetailsByOrderID:\n" + ex.Message);
+            }
+
+            return result;
         }
 
         public int AddNewOrder(int table_ID, char status, int staffMember_ID, DataGridView dataGridViewOrderMenuItems)
         {
-            MessageBox.Show("INSIDE NEW AddNewOrder");
+            MessageBox.Show("Order Added");
 
             try
             {
@@ -276,7 +358,7 @@ namespace RestaurantPOS
                     var response = client.PostAsync("http://127.0.0.1:8000/api/orders", content).Result;
                     string result = response.Content.ReadAsStringAsync().Result;
 
-                    MessageBox.Show("ORDER STATUS: " + (int)response.StatusCode + "\n\nRESPONSE:\n" + result);
+                    //MessageBox.Show("ORDER STATUS: " + (int)response.StatusCode + "\n\nRESPONSE:\n" + result);
 
                     if (!response.IsSuccessStatusCode)
                         return -1;
@@ -326,47 +408,68 @@ namespace RestaurantPOS
             }
         }
 
-        public void UpdateOrder(int order_ID, int table_ID, char status)
+        public bool HasActiveOrderForTable(int tableNumber)
         {
-            SqlConnection connection = this.manipulator.GetConnection();
-
             try
             {
-                connection.Open();
+                using (HttpClient client = new HttpClient())
+                {
+                    string json = client.GetStringAsync("http://127.0.0.1:8000/api/orders").Result;
+                    JArray orders = ExtractArrayFromApiResponse(json);
 
-                SqlCommand command = this.manipulator.GetCommand();
+                    foreach (var order in orders)
+                    {
+                        int apiTable = Convert.ToInt32(order["table_number"]);
+                        string status = order["status"]?.ToString();
 
-                command.CommandText = "update dbo.[Order] " +
-                                        "set [Table_ID] = @Table_ID, [Status] = @Status " +
-                                        "where [Order_ID] = @Order_ID;";
-
-                SqlParameter param = null;
-
-                param = new SqlParameter("@Order_ID", SqlDbType.Int);
-                param.Value = order_ID;
-                command.Parameters.Add(param);
-
-                param = new SqlParameter("@Table_ID", SqlDbType.Int);
-                param.Value = table_ID;
-                command.Parameters.Add(param);
-
-                param = new SqlParameter("@Status", SqlDbType.Char);
-                param.Value = status;
-                command.Parameters.Add(param);
-
-                command.ExecuteNonQuery();
-
-
+                        if (apiTable == tableNumber && status != "completed")
+                        {
+                            return true;
+                        }
+                    }
+                }
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                MessageBox.Show(e.ToString());
-            }
-            finally
-            {
-                connection.Close();
+                MessageBox.Show("API Error HasActiveOrderForTable:\n" + ex.Message);
             }
 
+            return false;
+        }
+
+        public void UpdateOrder(int order_ID, int table_ID, char status)
+        {
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    client.DefaultRequestHeaders.Accept.Add(
+                        new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json")
+                    );
+
+                    var data = new
+                    {
+                        table_number = table_ID,
+                        status = "new"
+                    };
+
+                    string jsonData = JsonConvert.SerializeObject(data);
+                    StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+                    var response = client.PutAsync($"http://127.0.0.1:8000/api/orders/{order_ID}", content).Result;
+                    string result = response.Content.ReadAsStringAsync().Result;
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        MessageBox.Show("API Error UpdateOrder:\n" + response.StatusCode + "\n" + result);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("API Error UpdateOrder:\n" + ex.Message);
+            }
         }
 
         public void DeleteOrderMenuItem(int order_ID)
@@ -401,36 +504,35 @@ namespace RestaurantPOS
 
         }
 
-        public void DeleteActiveOrder(int id)
+        public bool DeleteActiveOrder(int id)
         {
-            SqlConnection connection = this.manipulator.GetConnection();
-
             try
             {
-                connection.Open();
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    client.DefaultRequestHeaders.Accept.Add(
+                        new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json")
+                    );
 
-                SqlCommand command = this.manipulator.GetCommand();
+                    var response = client.DeleteAsync($"http://127.0.0.1:8000/api/orders/{id}").Result;
+                    string result = response.Content.ReadAsStringAsync().Result;
 
-                command.CommandText = "delete from dbo.[OrderMenuItem] where Order_ID = @Order_ID;" +
-                                        "delete from dbo.[Order] where Order_ID = @Order_ID;";
+                    if (response.IsSuccessStatusCode)
+                    {
+                        MessageBox.Show("Order deleted successfully.");
+                        return true;
+                    }
 
-                SqlParameter param = null;
-
-                param = new SqlParameter("@Order_ID", SqlDbType.Int);
-                param.Value = id;
-                command.Parameters.Add(param);
-
-                command.ExecuteNonQuery();
+                    MessageBox.Show("API Error DeleteActiveOrder:\n" + response.StatusCode + "\n" + result);
+                    return false;
+                }
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                MessageBox.Show(e.ToString());
+                MessageBox.Show("API Error DeleteActiveOrder:\n" + ex.Message);
+                return false;
             }
-            finally
-            {
-                connection.Close();
-            }
-
         }
 
         public void FinishOrder(int order_ID)
