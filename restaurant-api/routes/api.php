@@ -123,3 +123,49 @@ Route::prefix('reports')->group(function () {
     Route::get('waste-analysis', [ReportController::class, 'wasteAnalysis']);
     Route::get('supplier-performance', [ReportController::class, 'supplierPerformance']);
 }); 
+
+Route::put('/orders/{order}/items', function (Request $request, \App\Models\Order $order) {
+    $validated = $request->validate([
+        'table_number' => 'required|integer',
+        'items' => 'required|array|min:1',
+        'items.*.recipe_id' => 'required|integer',
+        'items.*.name' => 'required|string',
+        'items.*.price' => 'required|numeric',
+        'items.*.quantity' => 'required|integer|min:1',
+        'items.*.total' => 'required|numeric',
+    ]);
+
+    return \Illuminate\Support\Facades\DB::transaction(function () use ($order, $validated) {
+        $subtotal = collect($validated['items'])->sum('total');
+        $tax = $subtotal * 0.10;
+        $total = $subtotal + $tax;
+
+        $order->update([
+            'table_number' => $validated['table_number'],
+            'subtotal' => $subtotal,
+            'tax' => $tax,
+            'total' => $total,
+            'status' => 'new',
+        ]);
+
+        $order->orderItems()->delete();
+
+        foreach ($validated['items'] as $item) {
+            $order->orderItems()->create([
+                'recipe_id' => $item['recipe_id'],
+                'name' => $item['name'],
+                'price' => $item['price'],
+                'quantity' => $item['quantity'],
+                'total' => $item['total'],
+                'modifications' => [],
+                'notes' => null,
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Order items updated successfully.',
+            'data' => $order->load('orderItems.recipe')
+        ]);
+    });
+});
