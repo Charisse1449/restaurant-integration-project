@@ -1,5 +1,7 @@
 document.addEventListener('alpine:init', () => {
     Alpine.data('app', () => ({
+
+        API_URL: 'http://127.0.0.1:8000/api',
         // App state
         currentTab: 'pos',
         language: 'en',
@@ -11,6 +13,9 @@ document.addEventListener('alpine:init', () => {
         inventoryTab: 'inventory', // inventory, purchases, suppliers, waste, reports
         
         // Inventory state
+        recipes: [],
+        orders: [],
+        tables: [],
         inventory: [],
         suppliers: [],
         purchases: [],
@@ -670,7 +675,7 @@ document.addEventListener('alpine:init', () => {
             this.loadInventory();
             
             // Validate and clean data on startup
-            this.validateAndCleanData();
+            //this.validateAndCleanData();
             
             // Request notification permission
             if ('Notification' in window) {
@@ -706,51 +711,62 @@ document.addEventListener('alpine:init', () => {
         },
         
         // Load recipes from localStorage
-        loadRecipes() {
-            const savedRecipes = localStorage.getItem('restaurant_recipes');
-            this.recipes = savedRecipes ? JSON.parse(savedRecipes) : [
-                {
-                    id: 1,
-                    name: 'Margherita Pizza',
-                    category: 'Pizza',
-                    price: 12.99,
-                    basePortions: 2,
-                    ingredients: [
-                        {name: 'Pizza Dough', quantity: 1, unit: 'pc'},
-                        {name: 'Tomato Sauce', quantity: 150, unit: 'g'},
-                        {name: 'Mozzarella', quantity: 200, unit: 'g'},
-                        {name: 'Basil', quantity: 5, unit: 'leaves'}
-                    ],
-                    instructions: '1. Preheat oven to 250°C\n2. Spread sauce on dough\n3. Add cheese and basil\n4. Bake for 10-12 minutes'
-                },
-                {
-                    id: 2,
-                    name: 'Caesar Salad',
-                    category: 'Salad',
-                    price: 8.99,
-                    basePortions: 1,
-                    ingredients: [
-                        {name: 'Romaine Lettuce', quantity: 1, unit: 'head'},
-                        {name: 'Croutons', quantity: 50, unit: 'g'},
-                        {name: 'Parmesan', quantity: 30, unit: 'g'},
-                        {name: 'Caesar Dressing', quantity: 60, unit: 'ml'}
-                    ],
-                    instructions: '1. Wash and chop lettuce\n2. Add croutons and dressing\n3. Toss to combine\n4. Top with parmesan'
-                }
-            ];
+        async loadRecipes() {
+            try {
+                const res = await fetch(`${this.API_URL}/recipes`);
+                const json = await res.json();
+
+                const rows = json.data?.data || json.data || [];
+
+                this.recipes = rows.map(r => ({
+                    id: r.id,
+                    name: r.name,
+                    category: r.category,
+                    price: parseFloat(r.price),
+                    basePortions: r.base_portions || 1,
+                    prepTime: r.prep_time || 0,
+                    cookTime: r.cook_time || 0,
+                    difficulty: r.difficulty || 'easy',
+                    allergens: r.allergens || [],
+                    tags: r.tags || [],
+                    ingredients: r.ingredients || [],
+                    instructions: r.instructions || '',
+                    notes: r.notes || '',
+                    image: r.image || '',
+                    isActive: r.is_active
+                }));
+            } catch (error) {
+                console.error('API loadRecipes error:', error);
+                this.recipes = [];
+            }
         },
         
-        // Save recipes to localStorage
-        saveRecipes() {
-            localStorage.setItem('restaurant_recipes', JSON.stringify(this.recipes));
-            // Dispatch event to sync across tabs
-            window.dispatchEvent(new Event('storage'));
-        },
+       
         
         // Load orders from localStorage
-        loadOrders() {
-            const savedOrders = localStorage.getItem('restaurant_orders');
-            this.orders = savedOrders ? JSON.parse(savedOrders) : [];
+        async loadOrders() {
+            try {
+                const res = await fetch(`${this.API_URL}/orders`);
+                const json = await res.json();
+
+                const rows = json.data?.data || json.data || [];
+
+                this.orders = rows.map(o => ({
+                    id: o.id,
+                    type: o.type || 'dine-in',
+                    tableNumber: o.table_number,
+                    items: o.order_items || [],
+                    subtotal: parseFloat(o.subtotal || 0),
+                    tax: parseFloat(o.tax || 0),
+                    deliveryFee: parseFloat(o.delivery_fee || 0),
+                    total: parseFloat(o.total || 0),
+                    status: o.status || 'new',
+                    timestamp: new Date(o.created_at).getTime()
+                }));
+            } catch (error) {
+                console.error('API loadOrders error:', error);
+                this.orders = [];
+            }
         },
         
         // Save orders to localStorage
@@ -1295,39 +1311,11 @@ document.addEventListener('alpine:init', () => {
         
         // Enhanced KDS Functions
         getFilteredOrders() {
-            let filteredOrders = this.orders.filter(order => 
-                ['new', 'preparing', 'ready'].includes(order.status)
+            const orders = Array.isArray(this.orders) ? this.orders : [];
+
+            return orders.filter(order =>
+                order && ['new', 'preparing', 'ready'].includes(order.status)
             );
-            
-            // Apply filter
-            if (this.kdsFilter !== 'all') {
-                filteredOrders = filteredOrders.filter(order => order.type === this.kdsFilter);
-            }
-            
-            // Apply view filter
-            if (this.kdsView !== 'all') {
-                filteredOrders = filteredOrders.filter(order => order.status === this.kdsView);
-            }
-            
-            // Station filter
-            if (this.kdsStationFilter && this.kdsStationFilter !== 'all') {
-                filteredOrders = filteredOrders.filter(order => order.assignedStation === this.kdsStationFilter);
-            }
-            
-            // Apply sorting
-            switch(this.kdsSort) {
-                case 'time':
-                    filteredOrders.sort((a, b) => a.timestamp - b.timestamp);
-                    break;
-                case 'priority':
-                    filteredOrders.sort((a, b) => this.getOrderPriority(b) - this.getOrderPriority(a));
-                    break;
-                case 'table':
-                    filteredOrders.sort((a, b) => (a.tableNumber || 0) - (b.tableNumber || 0));
-                    break;
-            }
-            
-            return filteredOrders;
         },
         
         getOrderPriority(order) {
@@ -1420,48 +1408,26 @@ document.addEventListener('alpine:init', () => {
         },
         
         getKitchenStats() {
-            const todayOrders = this.orders.filter(order => {
-                const orderDate = new Date(order.timestamp).toDateString();
-                const today = new Date().toDateString();
-                return orderDate === today;
-            });
-            
-            const completedOrders = todayOrders.filter(order => order.status === 'completed');
-            const pendingOrders = todayOrders.filter(order => ['new', 'preparing', 'ready'].includes(order.status));
-            
-            // Calculate average prep time for completed orders
-            let avgPrepTime = 0;
-            if (completedOrders.length > 0) {
-                const totalPrepTime = completedOrders.reduce((sum, order) => {
-                    if (order.completedTime && order.timestamp) {
-                        const prepTime = (order.completedTime - order.timestamp) / (1000 * 60); // Convert to minutes
-                        return sum + prepTime;
-                    }
-                    return sum;
-                }, 0);
-                avgPrepTime = totalPrepTime / completedOrders.length;
-            }
-            
-            // Calculate efficiency based on on-time completion
-            let efficiency = 0;
-            if (completedOrders.length > 0) {
-                const onTimeOrders = completedOrders.filter(order => {
-                    if (order.completedTime && order.timestamp) {
-                        const actualPrepTime = (order.completedTime - order.timestamp) / (1000 * 60);
-                        const estimatedPrepTime = this.getEstimatedPrepTime(order);
-                        return actualPrepTime <= estimatedPrepTime;
-                    }
-                    return false;
-                });
-                efficiency = (onTimeOrders.length / completedOrders.length) * 100;
-            }
-            
+            const orders = Array.isArray(this.orders) ? this.orders : [];
+
+            const activeOrders = orders.filter(o =>
+                o && ['new', 'preparing', 'ready'].includes(o.status)
+            );
+
+            const completedOrders = orders.filter(o =>
+                o && o.status === 'completed'
+            );
+
+            const pendingOrders = orders.filter(o =>
+                o && o.status === 'new'
+            );
+
             return {
-                totalOrders: todayOrders.length,
+                totalOrders: orders.length,
                 completedOrders: completedOrders.length,
                 pendingOrders: pendingOrders.length,
-                avgPrepTime: Math.round(avgPrepTime),
-                efficiency: Math.round(efficiency)
+                avgPrepTime: 0,
+                efficiency: 100
             };
         },
         
@@ -1586,39 +1552,95 @@ document.addEventListener('alpine:init', () => {
             this.showRecipeForm = true;
         },
         
-        saveRecipe() {
-            // Ensure tags and allergens are arrays
-            const recipeToSave = {
-                ...this.recipeForm,
-                tags: Array.isArray(this.recipeForm.tags) ? this.recipeForm.tags : [],
-                allergens: Array.isArray(this.recipeForm.allergens) ? this.recipeForm.allergens : [],
-                ingredients: Array.isArray(this.recipeForm.ingredients) ? this.recipeForm.ingredients : [{name: '', quantity: 0, unit: '', notes: ''}]
-            };
-            
-            if (this.editingRecipe) {
-                // Update existing recipe
-                const index = this.recipes.findIndex(r => r.id === this.recipeForm.id);
-                if (index !== -1) {
-                    this.recipes[index] = recipeToSave;
+        async saveRecipe() {
+            try {
+                const noIngredientCategories = ["Beverages", "Drinks"];
+
+                let ingredients = [];
+
+                if (!noIngredientCategories.includes(this.recipeForm.category)) {
+                    ingredients = (this.recipeForm.ingredients || [])
+                        .filter(i => i.name && i.name.trim() !== "")
+                        .map(i => ({
+                            name: i.name,
+                            quantity: i.quantity && i.quantity > 0 ? String(i.quantity) : "1",
+                            unit: i.unit && i.unit.trim() !== "" ? i.unit : "pcs"
+                        }));
+
+                    if (ingredients.length === 0) {
+                        ingredients = [
+                            { name: "Default", quantity: "1", unit: "pcs" }
+                        ];
+                    }
                 }
-            } else {
-                // Add new recipe
-                recipeToSave.id = Date.now();
-                recipeToSave.createdAt = Date.now();
-                this.recipes.push(recipeToSave);
+
+                const data = {
+                    name: this.recipeForm.name,
+                    category: this.recipeForm.category,
+                    price: parseFloat(this.recipeForm.price),
+                    base_portions: 1,
+                    prep_time: parseInt(this.recipeForm.prepTime || 10),
+                    cook_time: parseInt(this.recipeForm.cookTime || 10),
+                    difficulty: this.recipeForm.difficulty || "easy",
+                    ingredients: ingredients,
+                    instructions: this.recipeForm.instructions || this.recipeForm.description || "No instructions",
+                    is_active: true
+                };
+
+                const response = await fetch(`${this.API_URL}/recipes`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    console.error(result);
+                    alert("Failed to save recipe:\n" + JSON.stringify(result));
+                    return;
+                }
+
+                alert("Recipe saved successfully!");
+
+                await this.loadRecipes();
+
+                this.showRecipeModal = false;
+                this.showRecipeForm = false;
+                this.resetRecipeForm();
+
+            } catch (error) {
+                console.error("Save recipe API error:", error);
+                alert("Error saving recipe.");
             }
-            
-            this.saveRecipes();
-            this.showRecipeForm = false;
-            this.editingRecipe = null;
-            this.resetRecipeForm();
         },
         
-        deleteRecipe(id) {
-            if (confirm(this.translations.deleteRecipeConfirm)) {
-                this.recipes = this.recipes.filter(recipe => recipe.id !== id);
-                this.saveRecipes();
+        async deleteRecipe(id) {
+            if (!confirm(this.translations.deleteRecipeConfirm)) return;
+
+            try {
+                const response = await fetch(`${this.API_URL}/recipes/${id}`, {
+                    method: "DELETE",
+                    headers: {
+                        "Accept": "application/json"
+                    }
+                });
+
+                if (!response.ok) {
+                    alert("Failed to delete recipe");
+                    return;
+                }
+
+                await this.loadRecipes();
                 this.selectedRecipe = null;
+
+                alert("Recipe deleted successfully!");
+            } catch (error) {
+                console.error(error);
+                alert("Error deleting recipe");
             }
         },
         
@@ -2130,7 +2152,7 @@ document.addEventListener('alpine:init', () => {
                             this.tables = backup.tables || [];
                             this.settings = { ...this.settings, ...backup.settings };
                             
-                            this.saveRecipes();
+                            this.loadRecipes();
                             this.saveOrders();
                             this.saveTables();
                             this.saveSettings();
@@ -2266,112 +2288,9 @@ document.addEventListener('alpine:init', () => {
         },
         // Enhanced Recipe Management Functions
         getFilteredRecipes() {
-            let filteredRecipes = this.recipes.filter(recipe => recipe.isActive !== false);
-            
-            // Determine which search term to use based on current tab
-            const searchTerm = this.currentTab === 'pos' ? this.posSearchTerm : this.recipeSearchTerm;
-            const filterCategory = this.currentTab === 'pos' ? this.posFilterCategory : this.recipeFilterCategory;
-            const sortBy = this.currentTab === 'pos' ? this.posSortBy : this.recipeSortBy;
-            const activeCategory = this.currentTab === 'pos' ? this.posActiveCategory : 'all';
-            const quickFilter = this.currentTab === 'pos' ? this.posQuickFilter : 'all';
-            
-            // Apply search filter
-            if (searchTerm) {
-                const searchLower = searchTerm.toLowerCase();
-                filteredRecipes = filteredRecipes.filter(recipe => 
-                    recipe.name.toLowerCase().includes(searchLower) ||
-                    recipe.category.toLowerCase().includes(searchLower) ||
-                    (recipe.tags && recipe.tags.some(tag => tag.toLowerCase().includes(searchLower))) ||
-                    (recipe.ingredients && recipe.ingredients.some(ing => ing.name.toLowerCase().includes(searchLower)))
-                );
-            }
-            
-            // Apply category filter
-            if (filterCategory !== 'all') {
-                filteredRecipes = filteredRecipes.filter(recipe => 
-                    recipe.category === filterCategory
-                );
-            }
-            
-            // Apply active category filter (for POS tabs)
-            if (activeCategory !== 'all') {
-                filteredRecipes = filteredRecipes.filter(recipe => 
-                    recipe.category === activeCategory
-                );
-            }
-            
-            // Apply quick filters (POS only)
-            if (this.currentTab === 'pos' && quickFilter !== 'all') {
-                switch (quickFilter) {
-                    case 'popular':
-                        // Filter by popular tags or high-priced items
-                        filteredRecipes = filteredRecipes.filter(recipe => 
-                            (recipe.tags && recipe.tags.includes('popular')) ||
-                            recipe.price > 15
-                        );
-                        break;
-                    case 'vegetarian':
-                        filteredRecipes = filteredRecipes.filter(recipe => 
-                            recipe.tags && recipe.tags.includes('vegetarian')
-                        );
-                        break;
-                    case 'spicy':
-                        filteredRecipes = filteredRecipes.filter(recipe => 
-                            recipe.tags && recipe.tags.includes('spicy')
-                        );
-                        break;
-                    case 'healthy':
-                        filteredRecipes = filteredRecipes.filter(recipe => 
-                            recipe.tags && recipe.tags.includes('healthy')
-                        );
-                        break;
-                }
-            }
-            
-            // Apply sorting
-            filteredRecipes.sort((a, b) => {
-                let aValue, bValue;
-                
-                switch(sortBy) {
-                    case 'name':
-                        aValue = a.name.toLowerCase();
-                        bValue = b.name.toLowerCase();
-                        break;
-                    case 'price':
-                        aValue = a.price;
-                        bValue = b.price;
-                        break;
-                    case 'popularity':
-                        // Sort by tags containing 'popular' or by price
-                        aValue = (a.tags && a.tags.includes('popular')) ? 1 : 0;
-                        bValue = (b.tags && b.tags.includes('popular')) ? 1 : 0;
-                        if (aValue === bValue) {
-                            aValue = a.price;
-                            bValue = b.price;
-                        }
-                        break;
-                    case 'category':
-                        aValue = a.category.toLowerCase();
-                        bValue = b.category.toLowerCase();
-                        break;
-                    case 'date':
-                        aValue = a.createdAt || 0;
-                        bValue = b.createdAt || 0;
-                        break;
-                    default:
-                        aValue = a.name.toLowerCase();
-                        bValue = b.name.toLowerCase();
-                }
-                
-                const sortOrder = this.currentTab === 'pos' ? 'asc' : this.recipeSortOrder;
-                if (sortOrder === 'desc') {
-                    return aValue < bValue ? 1 : -1;
-                } else {
-                    return aValue > bValue ? 1 : -1;
-                }
-            });
-            
-            return filteredRecipes;
+            const recipes = Array.isArray(this.recipes) ? this.recipes : [];
+
+            return recipes.filter(recipe => recipe && recipe.isActive !== false);
         },
         
         addRecipeCategory(category) {
@@ -2401,36 +2320,66 @@ document.addEventListener('alpine:init', () => {
         },
         
         // Enhanced recipe save with timestamps and validation
-        saveRecipe() {
-            // Validate required fields
+        async saveRecipe() {
             if (!this.recipeForm.name.trim() || !this.recipeForm.category.trim() || this.recipeForm.price <= 0) {
                 alert('Please fill in all required fields (name, category, price)');
                 return;
             }
-            
-            const now = Date.now();
-            
-            if (this.editingRecipe) {
-                // Update existing recipe
-                const index = this.recipes.findIndex(r => r.id === this.recipeForm.id);
-                if (index !== -1) {
-                    this.recipes[index] = {
-                        ...this.recipeForm,
-                        updatedAt: now
-                    };
+
+            try {
+                const data = {
+                    name: this.recipeForm.name,
+                    category: this.recipeForm.category,
+                    price: parseFloat(this.recipeForm.price),
+                    base_portions: this.recipeForm.basePortions || 1,
+                    prep_time: parseInt(this.recipeForm.prepTime || 10),
+                    cook_time: parseInt(this.recipeForm.cookTime || 10),
+                    difficulty: this.recipeForm.difficulty || "easy",
+                    allergens: this.recipeForm.allergens || [],
+                    tags: this.recipeForm.tags || [],
+                    ingredients: this.recipeForm.ingredients?.length
+                        ? this.recipeForm.ingredients
+                        : [{ name: "Test", quantity: "1", unit: "pcs" }],
+                    instructions: this.recipeForm.instructions || "",
+                    notes: this.recipeForm.notes || null,
+                    image: this.recipeForm.image || null,
+                    is_active: true
+                };
+
+                const url = this.editingRecipe
+                    ? `${this.API_URL}/recipes/${this.recipeForm.id}`
+                    : `${this.API_URL}/recipes`;
+
+                const method = this.editingRecipe ? "PUT" : "POST";
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    console.error(result);
+                    alert("Failed to save recipe.");
+                    return;
                 }
-            } else {
-                // Add new recipe
-                this.recipeForm.id = now;
-                this.recipeForm.createdAt = now;
-                this.recipeForm.updatedAt = now;
-                this.recipes.push({...this.recipeForm});
+
+                alert("Recipe saved successfully!");
+
+                await this.loadRecipes();
+
+                this.showRecipeForm = false;
+                this.editingRecipe = null;
+                this.resetRecipeForm();
+            } catch (error) {
+                console.error("Save recipe API error:", error);
+                alert("Error saving recipe.");
             }
-            
-            this.saveRecipes();
-            this.showRecipeForm = false;
-            this.editingRecipe = null;
-            this.resetRecipeForm();
         },
         
         resetRecipeForm() {
@@ -2466,7 +2415,7 @@ document.addEventListener('alpine:init', () => {
                 updatedAt: Date.now()
             };
             this.recipes.push(duplicatedRecipe);
-            this.saveRecipes();
+            this.loadRecipes();
         },
         
         toggleRecipeActive(recipeId) {
@@ -2474,7 +2423,7 @@ document.addEventListener('alpine:init', () => {
             if (recipe) {
                 recipe.isActive = !recipe.isActive;
                 recipe.updatedAt = Date.now();
-                this.saveRecipes();
+                this.loadRecipes();
             }
         },
         
@@ -2493,16 +2442,7 @@ document.addEventListener('alpine:init', () => {
             }
         },
         
-        loadRecipes() {
-            try {
-                const savedRecipes = localStorage.getItem('restaurant_recipes');
-                this.recipes = savedRecipes ? JSON.parse(savedRecipes) : this.getDefaultRecipes();
-                this.loadRecipeCategories();
-            } catch (error) {
-                console.error('Error loading recipes:', error);
-                this.recipes = this.getDefaultRecipes();
-            }
-        },
+        
         
         getDefaultRecipes() {
             return [
@@ -3079,7 +3019,7 @@ document.addEventListener('alpine:init', () => {
             
             // Save cleaned data
             this.saveOrders();
-            this.saveRecipes();
+            this.loadRecipes();
             this.saveTables();
         },
         
@@ -3135,7 +3075,7 @@ document.addEventListener('alpine:init', () => {
                 this.recipeCategories = Array.isArray(data.recipeCategories) ? data.recipeCategories : [];
                 
                 // Save all imported data
-                this.saveRecipes();
+                this.loadRecipes();
                 this.saveOrders();
                 this.saveTables();
                 this.saveSettings();
