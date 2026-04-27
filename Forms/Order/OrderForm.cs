@@ -204,9 +204,7 @@ namespace RestaurantPOS.Forms
         private void buttonSave_Click(object sender, EventArgs e)
         {
             bool mistake = this.CellValidating(dataGridViewOrderMenuItems, comboBoxTableNumber);
-
-            if (mistake)
-                return;
+            if (mistake) return;
 
             if (order_id <= 0)
             {
@@ -217,13 +215,9 @@ namespace RestaurantPOS.Forms
             int newTableID;
 
             if (comboBoxTableNumber.SelectedValue != null)
-            {
                 newTableID = Convert.ToInt32(comboBoxTableNumber.SelectedValue);
-            }
             else if (!string.IsNullOrWhiteSpace(comboBoxTableNumber.Text))
-            {
                 newTableID = Convert.ToInt32(comboBoxTableNumber.Text);
-            }
             else
             {
                 MessageBox.Show("Please select a table.");
@@ -234,28 +228,17 @@ namespace RestaurantPOS.Forms
             {
                 Configurator configurator = new Configurator();
 
-                configurator.UpdateOrder(order_id, newTableID, 'A');
+                bool updated = configurator.UpdateOrderWithItems(
+                    order_id,
+                    newTableID,
+                    dataGridViewOrderMenuItems
+                );
 
-                MessageBox.Show("Order successfully updated!");
-                this.Close();
-
-                //configurator.DeleteOrderMenuItem(order_id);
-
-                for (int i = 0; i < dataGridViewOrderMenuItems.RowCount - 1; i++)
+                if (updated)
                 {
-                    var row = dataGridViewOrderMenuItems.Rows[i];
-
-                    if (row.Cells[2].Value == null || row.Cells[1].Value == null)
-                        continue;
-
-                    int newMenuItem_ID = Convert.ToInt32(row.Cells[2].Value);
-                    int newQuantity = Convert.ToInt32(row.Cells[1].Value);
-
-                    //configurator.AddNewOrderMenuItem(order_id, newMenuItem_ID, newQuantity);
+                    MessageBox.Show("Order successfully updated!");
+                    this.Close();
                 }
-
-                MessageBox.Show("Order successfully updated!");
-                this.Close();
             }
             catch (Exception ex)
             {

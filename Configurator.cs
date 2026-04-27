@@ -436,6 +436,67 @@ namespace RestaurantPOS
 
             return false;
         }
+        public bool UpdateOrderWithItems(int order_ID, int table_ID, DataGridView dataGridViewOrderMenuItems)
+        {
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    client.DefaultRequestHeaders.Accept.Add(
+                        new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json")
+                    );
+
+                    var items = new List<object>();
+
+                    foreach (DataGridViewRow row in dataGridViewOrderMenuItems.Rows)
+                    {
+                        if (row.IsNewRow) continue;
+                        if (row.Cells[2].Value == null || row.Cells[1].Value == null) continue;
+
+                        int recipeId = Convert.ToInt32(row.Cells[2].Value);
+                        int quantity = Convert.ToInt32(row.Cells[1].Value);
+                        string name = Convert.ToString(row.Cells[0].Value);
+                        double price = Convert.ToDouble(row.Cells[3].Value);
+                        double total = price * quantity;
+
+                        items.Add(new
+                        {
+                            recipe_id = recipeId,
+                            name = name,
+                            price = price,
+                            quantity = quantity,
+                            total = total
+                        });
+                    }
+
+                    var data = new
+                    {
+                        table_number = table_ID,
+                        items = items
+                    };
+
+                    string jsonData = JsonConvert.SerializeObject(data);
+                    StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+                    var response = client.PutAsync($"http://127.0.0.1:8000/api/orders/{order_ID}/items", content).Result;
+                    string result = response.Content.ReadAsStringAsync().Result;
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        MessageBox.Show("API Error UpdateOrderWithItems:\n" + response.StatusCode + "\n" + result);
+                        return false;
+                    }
+
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("API Error UpdateOrderWithItems:\n" + ex.Message);
+                return false;
+            }
+        }
 
         public void UpdateOrder(int order_ID, int table_ID, char status)
         {
@@ -474,34 +535,28 @@ namespace RestaurantPOS
 
         public void DeleteOrderMenuItem(int order_ID)
         {
-            SqlConnection connection = this.manipulator.GetConnection();
-
             try
             {
-                connection.Open();
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    client.DefaultRequestHeaders.Accept.Add(
+                        new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json")
+                    );
 
-                SqlCommand command = this.manipulator.GetCommand();
+                    var response = client.DeleteAsync($"http://127.0.0.1:8000/api/orders/{order_ID}/items").Result;
+                    string result = response.Content.ReadAsStringAsync().Result;
 
-                command.CommandText = "delete from dbo.[OrderMenuItem] where [Order_ID] = @Order_ID;";
-
-                SqlParameter param = null;
-
-                param = new SqlParameter("@Order_ID", SqlDbType.Int);
-                param.Value = order_ID;
-                command.Parameters.Add(param);
-
-                command.ExecuteNonQuery();
-
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        MessageBox.Show("API Error DeleteOrderMenuItem:\n" + response.StatusCode + "\n" + result);
+                    }
+                }
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                MessageBox.Show(e.ToString());
+                MessageBox.Show("API Error DeleteOrderMenuItem:\n" + ex.Message);
             }
-            finally
-            {
-                connection.Close();
-            }
-
         }
 
         public bool DeleteActiveOrder(int id)
