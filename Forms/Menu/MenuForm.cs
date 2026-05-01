@@ -47,7 +47,7 @@ namespace RestaurantPOS.Forms
             DataTable dTableDrinks = configurator.LoadMenuItemsByType("Drinks");
             MenuButtons_Load(dTableDrinks, panelDrinks);
 
-            buttonAdd.Visible = role == 1;
+            buttonAdd.Visible = false;
         }
 
         private void MenuButtons_Load(DataTable dTable, Panel panel)

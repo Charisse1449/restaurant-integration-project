@@ -494,7 +494,7 @@ namespace RestaurantPOS.Forms
                 {
                     subtotal = Convert.ToDouble(dataGridViewOrderMenuItems.Rows[i].Cells[3].Value) * Convert.ToInt32(dataGridViewOrderMenuItems.Rows[i].Cells[1].Value);
                     dataGridViewOrderMenuItems.Rows[i].Cells[4].Value = subtotal;
-                    total += subtotal;
+                    total += subtotal;  
                 }
 
             }

@@ -10,33 +10,19 @@ namespace RestaurantPOS
 {
     class DBManipulator
     {
-        // DISABLED SQL CONNECTION (we now use API only)
-        private readonly static string connectionString = "";
-
-        private SqlConnection connection;
-        private SqlCommand command;
-
         public DBManipulator()
         {
-            try
-            {
-                this.connection = new SqlConnection(connectionString);
-                this.command = new SqlCommand();
-                this.command.Connection = this.connection;
-            }
-            catch (Exception e)
-            {
-                MessageBox.Show(e.ToString());
-            }
+            // Disabled. System now uses Laravel API only.
         }
+
         public SqlConnection GetConnection()
         {
-            return this.connection;
+            throw new InvalidOperationException("Direct SQL is disabled. Use Laravel API instead.");
         }
+
         public SqlCommand GetCommand()
         {
-            this.command.Parameters.Clear();
-            return this.command;
+            throw new InvalidOperationException("Direct SQL is disabled. Use Laravel API instead.");
         }
     }
 }

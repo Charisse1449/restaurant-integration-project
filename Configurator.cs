@@ -640,7 +640,7 @@ namespace RestaurantPOS
         /// Loads the different types of roles for the Add New User Form.
         /// </summary>
         /// <returns></returns>
-        public DataTable LoadRoles()
+        /*public DataTable LoadRoles()
         {
             DataTable result = new DataTable();
 
@@ -685,7 +685,7 @@ namespace RestaurantPOS
             }
 
             return result;
-        }
+        }*/
 
         /// <summary>
         /// Adds new user to the database.
