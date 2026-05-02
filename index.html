@@ -49,12 +49,13 @@
                 
                 <!-- Navigation -->
                 <nav class="flex gap-4">
-                    <button @click="currentTab = 'pos'" 
+                    <!-- POS hidden because ordering is handled by Desktop POS -->
+                    <!--<button @click="currentTab = 'pos'" 
                             class="px-3 py-1 rounded-md hover:bg-white hover:text-primary transition"
                             :class="{'bg-white text-primary': currentTab === 'pos'}">
                         <i class="fas fa-cash-register mr-2"></i>
                         <span x-text="translations.pos"></span>
-                    </button>
+                    </button>-->
                     <button @click="currentTab = 'kds'" 
                             class="px-3 py-1 rounded-md hover:bg-white hover:text-primary transition"
                             :class="{'bg-white text-primary': currentTab === 'kds'}">
@@ -306,7 +307,7 @@
                     </div>
                 </div>
                 
-                <!-- Current Order Panel -->
+                <!-- Current Order Panel 
                 <div class="lg:col-span-1">
                     <div class="bg-gray-50 rounded-lg p-6 sticky top-6">
                         <div class="flex justify-between items-center mb-4">
@@ -316,7 +317,7 @@
                                     x-show="currentOrder.items.length > 0">
                                 <i class="fas fa-trash"></i>
                             </button>
-                        </div>
+                        </div>-->
                         
                         <!-- Order Items -->
                         <div class="mb-4 max-h-96 overflow-y-auto">
@@ -1113,16 +1114,16 @@
             </h2>
             
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Table List -->
+                 <!--Table List --->
                 <div class="lg:col-span-2">
-                    <div class="flex justify-between items-center mb-4">
+                    <!--<div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-bold" x-text="translations.tables"></h3>
                         <button @click="addTable()"
                                 class="bg-primary text-white px-4 py-2 rounded-lg text-sm hover:bg-teal-700 transition">
                             <i class="fas fa-plus mr-1"></i>
                             <span x-text="translations.addTable"></span>
                         </button>
-                    </div>
+                    </div>-->
                     
                     <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                         <template x-for="table in tables" :key="table.id">

@@ -3,7 +3,7 @@ document.addEventListener('alpine:init', () => {
 
         API_URL: 'http://127.0.0.1:8000/api',
         // App state
-        currentTab: 'pos',
+        currentTab: 'recipes',
         language: 'en',
         direction: 'ltr',
         orderType: 'dine-in',
@@ -810,14 +810,40 @@ document.addEventListener('alpine:init', () => {
         },
         
         // Load tables from localStorage
-        loadTables() {
-            const savedTables = localStorage.getItem('restaurant_tables');
-            this.tables = savedTables ? JSON.parse(savedTables) : [
-                {id: 1, number: 1, capacity: 4, status: 'available', location: 'Window', notes: ''},
-                {id: 2, number: 2, capacity: 6, status: 'available', location: 'Center', notes: ''},
-                {id: 3, number: 3, capacity: 2, status: 'available', location: 'Bar', notes: 'High-top table'},
-                {id: 4, number: 4, capacity: 8, status: 'available', location: 'Patio', notes: 'Outdoor seating'}
-            ];
+        async loadTables() {
+            try {
+                const res = await fetch(`${this.API_URL}/tables`);
+                const json = await res.json();
+
+                console.log("TABLE API RESPONSE:", json);
+
+                const rows = Array.isArray(json.data?.data)
+                    ? json.data.data
+                    : Array.isArray(json.data)
+                        ? json.data
+                        : Array.isArray(json.tables)
+                            ? json.tables
+                            : Array.isArray(json)
+                                ? json
+                                : [];
+
+                this.tables = rows.map(t => ({
+                    id: t.id,
+                    number: t.number,
+                    capacity: t.capacity || t.seats || 4,
+                    status: t.status || 'available',
+                    location: t.location || 'Main Area',
+                    notes: t.notes || '',
+                    customerName: t.customer_name || '',
+                    customerPhone: t.customer_phone || '',
+                    reservationTime: t.reservation_time || ''
+                }));
+
+                console.log("LOADED TABLES:", this.tables);
+            } catch (error) {
+                console.error('API loadTables error:', error);
+                this.tables = [];
+            }
         },
         
         // Save tables to localStorage
@@ -1292,20 +1318,66 @@ document.addEventListener('alpine:init', () => {
         },
         
         // KDS Functions
-        updateOrderStatus(orderId, status) {
-            const order = this.orders.find(o => o.id === orderId);
-            if (order) {
-                order.status = status;
-                this.saveOrders();
+        async updateOrderStatus(orderId, status) {
+            try {
+                const response = await fetch(`${this.API_URL}/orders/${orderId}/status`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({
+                        status: status
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    console.error(result);
+                    alert("Failed to update order status.");
+                    return;
+                }
+
+                await this.loadOrders();
+                await this.loadTables();
+
+            } catch (error) {
+                console.error("Update order status error:", error);
+                alert("Error updating order status.");
             }
         },
-        
-        completeOrder(orderId) {
-            const order = this.orders.find(o => o.id === orderId);
-            if (order) {
-                order.status = 'completed';
-                order.completedTime = Date.now();
-            this.saveOrders();
+
+        async completeOrder(orderId) {
+            try {
+                const response = await fetch(`${this.API_URL}/orders/${orderId}/status`, {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({
+                        status: "completed"
+                    })
+                });
+
+                const result = await response.json();
+
+                console.log("COMPLETE ORDER RESPONSE:", result);
+
+                if (!response.ok) {
+                    alert("Failed to complete order:\n" + JSON.stringify(result));
+                    return;
+                }
+
+                alert("Order completed successfully!");
+
+                await this.loadOrders();
+                await this.loadTables();
+
+            } catch (error) {
+                console.error("Complete order error:", error);
+                alert("Error completing order.");
             }
         },
         

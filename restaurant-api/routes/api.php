@@ -169,3 +169,38 @@ Route::put('/orders/{order}/items', function (Request $request, \App\Models\Orde
         ]);
     });
 });
+
+
+use App\Models\Order;
+
+Route::patch('/orders/{order}/status', function (Request $request, Order $order) {
+    $validated = $request->validate([
+        'status' => 'required|string|in:new,preparing,ready,completed,cancelled'
+    ]);
+
+    $order->update([
+        'status' => $validated['status']
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Order status updated successfully.',
+        'data' => $order->load('orderItems.recipe')
+    ]);
+});
+
+Route::patch('/orders/{order}/status', function (Request $request, Order $order) {
+    $validated = $request->validate([
+        'status' => 'required|string|in:new,preparing,ready,completed,cancelled'
+    ]);
+
+    $order->update([
+        'status' => $validated['status']
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Order status updated successfully.',
+        'data' => $order->load('orderItems.recipe')
+    ]);
+});
