@@ -640,7 +640,7 @@ namespace RestaurantPOS
         /// Loads the different types of roles for the Add New User Form.
         /// </summary>
         /// <returns></returns>
-        /*public DataTable LoadRoles()
+        public DataTable LoadRoles()
         {
             DataTable result = new DataTable();
 
@@ -685,7 +685,7 @@ namespace RestaurantPOS
             }
 
             return result;
-        }*/
+        }
 
         /// <summary>
         /// Adds new user to the database.
@@ -756,6 +756,22 @@ namespace RestaurantPOS
                     {
                         string category = recipe["category"]?.ToString()?.Trim() ?? "";
                         string requestedType = type?.Trim() ?? "";
+
+                        if (category.Equals("Salad", StringComparison.OrdinalIgnoreCase))
+                            category = "Salads";
+
+                        if (category.Equals("Beverages", StringComparison.OrdinalIgnoreCase))
+                            category = "Drinks";
+
+                        if (category.Equals("Burgers", StringComparison.OrdinalIgnoreCase) ||
+                            category.Equals("Pasta", StringComparison.OrdinalIgnoreCase) ||
+                            category.Equals("Seafood", StringComparison.OrdinalIgnoreCase) ||
+                            category.Equals("Mexican", StringComparison.OrdinalIgnoreCase) ||
+                            category.Equals("Sides", StringComparison.OrdinalIgnoreCase) ||
+                            category.Equals("Soups", StringComparison.OrdinalIgnoreCase))
+                        {
+                            category = "Main Dishes";
+                        }
 
                         if (string.Equals(category, requestedType, StringComparison.OrdinalIgnoreCase))
                         {
