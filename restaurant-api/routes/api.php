@@ -182,25 +182,29 @@ Route::patch('/orders/{order}/status', function (Request $request, Order $order)
         'status' => $validated['status']
     ]);
 
+    // ✅ If order is completed/cancelled, make table available again
+    if (in_array($validated['status'], ['completed', 'cancelled'])) {
+        DB::table('tables')
+            ->where('number', $order->table_number)
+            ->update([
+                'status' => 'available',
+                'updated_at' => now()
+            ]);
+    }
+
+    // ✅ If order is active, keep table occupied
+    if (in_array($validated['status'], ['new', 'preparing', 'ready'])) {
+        DB::table('tables')
+            ->where('number', $order->table_number)
+            ->update([
+                'status' => 'occupied',
+                'updated_at' => now()
+            ]);
+    }
+
     return response()->json([
         'success' => true,
-        'message' => 'Order status updated successfully.',
-        'data' => $order->load('orderItems.recipe')
-    ]);
-});
-
-Route::patch('/orders/{order}/status', function (Request $request, Order $order) {
-    $validated = $request->validate([
-        'status' => 'required|string|in:new,preparing,ready,completed,cancelled'
-    ]);
-
-    $order->update([
-        'status' => $validated['status']
-    ]);
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Order status updated successfully.',
+        'message' => 'Order status and table status updated successfully.',
         'data' => $order->load('orderItems.recipe')
     ]);
 });

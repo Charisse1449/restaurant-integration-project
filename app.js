@@ -664,30 +664,23 @@ document.addEventListener('alpine:init', () => {
         },
         
         // Initialize app
-        initApp() {
-            // Load all data from localStorage with error handling
-            this.loadRecipes();
-            this.loadOrders();
+        async initApp() {
+            await this.loadRecipes();
             this.loadSettings();
-            this.loadTables();
+            await this.loadOrders();
+            await this.loadTables();
             this.loadChefs();
             this.loadStations();
             this.loadInventory();
-            
-            // Validate and clean data on startup
-            //this.validateAndCleanData();
-            
-            // Request notification permission
+
             if ('Notification' in window) {
                 Notification.requestPermission();
             }
-            
-            // Start KDS auto-refresh if enabled
+
             if (this.kdsAutoRefresh) {
                 this.startKdsAutoRefresh();
             }
-            
-            // Watch for tab changes to manage KDS auto-refresh
+
             this.$watch('currentTab', (newTab) => {
                 if (newTab === 'kds' && this.kdsAutoRefresh) {
                     this.startKdsAutoRefresh();
@@ -695,18 +688,15 @@ document.addEventListener('alpine:init', () => {
                     this.stopKdsAutoRefresh();
                 }
             });
-            
-            // Set initial language from localStorage or browser
+
             const savedLang = localStorage.getItem('restaurant_lang');
             this.language = savedLang || 'en';
             this.direction = this.language === 'ar' ? 'rtl' : 'ltr';
-            
-            // Update translations based on language
+
             if (this.language === 'ar') {
                 this.translations = this.arTranslations;
             }
-            
-            // Initialize real-time sync
+
             this.initRealtimeSync();
         },
         
@@ -828,16 +818,28 @@ document.addEventListener('alpine:init', () => {
                                 : [];
 
                 this.tables = rows.map(t => ({
-                    id: t.id,
-                    number: t.number,
-                    capacity: t.capacity || t.seats || 4,
-                    status: t.status || 'available',
-                    location: t.location || 'Main Area',
-                    notes: t.notes || '',
-                    customerName: t.customer_name || '',
-                    customerPhone: t.customer_phone || '',
-                    reservationTime: t.reservation_time || ''
-                }));
+                id: t.id,
+                number: t.number,
+                capacity: t.capacity || t.seats || 4,
+                status: t.status || 'available',
+                location: t.location || 'Main Area',
+                notes: t.notes || '',
+                customerName: t.customer_name || '',
+                customerPhone: t.customer_phone || '',
+                reservationTime: t.reservation_time || ''
+            }));
+
+            // ✅ Override table status using actual active orders
+            const activeTableNumbers = this.orders
+                .filter(o => ["new", "preparing", "ready"].includes(o.status))
+                .map(o => Number(o.table_number || o.tableNumber));
+
+            this.tables = this.tables.map(table => ({
+                ...table,
+                status: activeTableNumbers.includes(Number(table.number))
+                    ? "occupied"
+                    : "available"
+            }));
 
                 console.log("LOADED TABLES:", this.tables);
             } catch (error) {
@@ -2360,9 +2362,41 @@ document.addEventListener('alpine:init', () => {
         },
         // Enhanced Recipe Management Functions
         getFilteredRecipes() {
-            const recipes = Array.isArray(this.recipes) ? this.recipes : [];
+            let recipes = Array.isArray(this.recipes) ? [...this.recipes] : [];
 
-            return recipes.filter(recipe => recipe && recipe.isActive !== false);
+            if (this.recipeSearchTerm && this.recipeSearchTerm.trim() !== "") {
+                const q = this.recipeSearchTerm.toLowerCase();
+
+                recipes = recipes.filter(r =>
+                    (r.name || "").toLowerCase().includes(q) ||
+                    (r.category || "").toLowerCase().includes(q) ||
+                    ((r.tags || []).join(" ").toLowerCase().includes(q))
+                );
+            }
+
+            if (this.recipeFilterCategory && this.recipeFilterCategory !== "all") {
+                recipes = recipes.filter(r =>
+                    (r.category || "").toLowerCase() === this.recipeFilterCategory.toLowerCase()
+                );
+            }
+
+            if (this.recipeSortBy === "name") {
+                recipes.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+            }
+
+            if (this.recipeSortBy === "price") {
+                recipes.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+            }
+
+            if (this.recipeSortBy === "category") {
+                recipes.sort((a, b) => (a.category || "").localeCompare(b.category || ""));
+            }
+
+            if (this.recipeSortOrder === "desc") {
+                recipes.reverse();
+            }
+
+            return recipes;
         },
         
         addRecipeCategory(category) {
