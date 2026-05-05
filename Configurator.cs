@@ -229,6 +229,37 @@ namespace RestaurantPOS
         /// <param name="id"></param>
         /// <returns></returns>
 
+        public bool LoginStaff(string username, string password)
+        {
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromSeconds(10);
+
+                    var data = new
+                    {
+                        email = username,
+                        password = password
+                    };
+
+                    string jsonData = JsonConvert.SerializeObject(data);
+                    StringContent content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+                    var response = client.PostAsync("http://127.0.0.1:8000/api/login", content).Result;
+                    string result = response.Content.ReadAsStringAsync().Result;
+
+                    if (!response.IsSuccessStatusCode)
+                        return false;
+
+                    return true;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
         public DataTable LoadOrderDetailsByOrderID(int id)
         {
             DataTable result = CreateOrderDetailsTable();
@@ -277,12 +308,12 @@ namespace RestaurantPOS
 
         public int AddNewOrder(int table_ID, char status, int staffMember_ID, DataGridView dataGridViewOrderMenuItems)
         {
-            MessageBox.Show("Order Added");
-
             try
             {
                 using (HttpClient client = new HttpClient())
                 {
+                    client.Timeout = TimeSpan.FromSeconds(10);
+
                     client.DefaultRequestHeaders.Accept.Clear();
                     client.DefaultRequestHeaders.Accept.Add(
                         new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json")
@@ -316,6 +347,12 @@ namespace RestaurantPOS
                         });
                     }
 
+                    if (items.Count == 0)
+                    {
+                        MessageBox.Show("Please add at least one item.");
+                        return -1;
+                    }
+
                     var data = new
                     {
                         type = "dine-in",
@@ -335,10 +372,11 @@ namespace RestaurantPOS
                     var response = client.PostAsync("http://127.0.0.1:8000/api/orders", content).Result;
                     string result = response.Content.ReadAsStringAsync().Result;
 
-                    //MessageBox.Show("ORDER STATUS: " + (int)response.StatusCode + "\n\nRESPONSE:\n" + result);
-
                     if (!response.IsSuccessStatusCode)
+                    {
+                        MessageBox.Show("API Error AddNewOrder:\n" + response.StatusCode + "\n" + result);
                         return -1;
+                    }
 
                     JObject obj = JObject.Parse(result);
 

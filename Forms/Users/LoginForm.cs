@@ -20,51 +20,28 @@ namespace RestaurantPOS
 
         private void buttonLogin_Click(object sender, EventArgs e)
         {
-            //if ((this.textBoxUsername.Text == "admin") && (this.textBoxPassword.Text == "admin"))
-            //{
-            //    this.Hide();
-            //    MainForm mainForm = new MainForm("a");
-            //    mainForm.ShowDialog();
-            //}
-            //else
-            //{
-            //    MessageBox.Show("Wrong username or password.");
-            //}
+            string username = textBoxUsername.Text.Trim();
+            string password = textBoxPassword.Text.Trim();
 
-            string username = this.textBoxUsername.Text.Trim();
-            string password = this.textBoxPassword.Text.Trim();
-
-            // ✅ VALIDATION FIRST
-            if (string.IsNullOrEmpty(username) && string.IsNullOrEmpty(password))
+            if (username == "" || password == "")
             {
-                MessageBox.Show("Please input username and password first.");
-                return;
-            }
-            else if (string.IsNullOrEmpty(username))
-            {
-                MessageBox.Show("Please input username first.");
-                return;
-            }
-            else if (string.IsNullOrEmpty(password))
-            {
-                MessageBox.Show("Please input password first.");
+                MessageBox.Show("Please enter username and password.");
                 return;
             }
 
-            // ✅ ONLY CALL DATABASE IF VALID
             Configurator configurator = new Configurator();
-            int role = configurator.CheckLoginAndRole(username, password);
 
-            if (role != 0)
+            bool loginSuccess = configurator.LoginStaff(username, password);
+
+            if (loginSuccess)
             {
+                MainForm main = new MainForm(1);
+                main.Show();
                 this.Hide();
-                MainForm mainForm = new MainForm(role);
-                mainForm.ShowDialog();
-                this.Close();
             }
             else
             {
-                MessageBox.Show("Wrong username or password.");
+                MessageBox.Show("Invalid username or password.");
             }
         }
 
