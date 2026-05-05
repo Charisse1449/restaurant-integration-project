@@ -69,24 +69,41 @@ namespace RestaurantPOS.Forms
 
         private void OpenOrder(Button table)
         {
+            int selectedTableId;
+
+            if (!int.TryParse(table.Text, out selectedTableId))
+            {
+                MessageBox.Show("Invalid table selected.");
+                return;
+            }
+
             if (activeTableButtons.Contains(table))
             {
-                OrderForm fOrder = new OrderForm(Convert.ToInt32(table.Text), "view");
-                fOrder.FormClosed += new FormClosedEventHandler(child_FormClosed);
+                OrderForm fOrder = new OrderForm(selectedTableId, "view");
                 fOrder.ShowDialog();
+
+                this.Controls.Clear();
+                this.InitializeComponent();
+                this.activeTableButtons = new List<Button>();
+                this.Tables_Load(this, EventArgs.Empty);
             }
             else
             {
-                DialogResult res = MessageBox.Show("There is no active order for this table. Would you like to create one?", "Confirmation", MessageBoxButtons.YesNo);
+                DialogResult res = MessageBox.Show(
+                    "There is no active order for this table. Would you like to create one?",
+                    "Confirmation",
+                    MessageBoxButtons.YesNo
+                );
+
                 if (res == DialogResult.Yes)
                 {
-                    OrderForm fOrder = new OrderForm(Convert.ToInt32(table.Text), "addWithTableID");
-                    fOrder.FormClosed += new FormClosedEventHandler(child_FormClosed);
+                    OrderForm fOrder = new OrderForm(selectedTableId, "addWithTableID");
                     fOrder.ShowDialog();
-                }
-                if (res == DialogResult.No)
-                {
 
+                    this.Controls.Clear();
+                    this.InitializeComponent();
+                    this.activeTableButtons = new List<Button>();
+                    this.Tables_Load(this, EventArgs.Empty);
                 }
             }
         }
@@ -137,12 +154,11 @@ namespace RestaurantPOS.Forms
         }
 
         private void child_FormClosed(object sender, FormClosedEventArgs e)
-        { 
-     
+        {
             this.Controls.Clear();
             this.InitializeComponent();
+            this.activeTableButtons = new List<Button>();
             this.Tables_Load(this, EventArgs.Empty);
-            //this.Show();
         }
 
     }

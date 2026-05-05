@@ -102,35 +102,13 @@ namespace RestaurantPOS
 
             try
             {
-                using (HttpClient client = new HttpClient())
+                DataTable activeOrders = LoadOrders('A');
+
+                foreach (DataRow order in activeOrders.Rows)
                 {
-                    string url = "http://127.0.0.1:8000/api/tables";
-                    string json = client.GetStringAsync(url).Result;
-
-                    JToken token = JToken.Parse(json);
-
-                    JArray tables;
-
-                    if (token.Type == JTokenType.Array)
-                    {
-                        tables = (JArray)token;
-                    }
-                    else
-                    {
-                        tables = (JArray)token["data"];
-                    }
-
-                    foreach (var table in tables)
-                    {
-                        string status = table["status"].ToString();
-
-                        if (status == "occupied")
-                        {
-                            DataRow row = result.NewRow();
-                            row["Table_ID"] = table["number"].ToString();
-                            result.Rows.Add(row);
-                        }
-                    }
+                    DataRow row = result.NewRow();
+                    row["Table_ID"] = order["Table_ID"];
+                    result.Rows.Add(row);
                 }
             }
             catch (Exception e)
@@ -221,9 +199,8 @@ namespace RestaurantPOS
 
                         bool include = false;
 
-                        if (status == 'A' && apiStatus != "completed")
-                            include = true;
-                        else if (status == 'C' && apiStatus == "completed")
+                        if (status == 'A' &&
+                           (apiStatus == "new" || apiStatus == "preparing" || apiStatus == "ready"))
                             include = true;
 
                         if (include)
@@ -590,41 +567,44 @@ namespace RestaurantPOS
             }
         }
 
-        public void FinishOrder(int order_ID)
+        public bool FinishOrder(int order_ID)
         {
             try
             {
-                using (HttpClient client = new HttpClient())
+                using (var client = new System.Net.Http.HttpClient())
                 {
-                    client.DefaultRequestHeaders.Accept.Clear();
-                    client.DefaultRequestHeaders.Accept.Add(
-                        new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json")
+                    client.BaseAddress = new Uri("http://127.0.0.1:8000/api/");
+
+                    var json = "{\"status\":\"completed\"}";
+                    var content = new System.Net.Http.StringContent(
+                        json,
+                        Encoding.UTF8,
+                        "application/json"
                     );
 
-                    var request = new HttpRequestMessage(
-                        new HttpMethod("PATCH"),
-                        $"http://127.0.0.1:8000/api/orders/{order_ID}/complete"
+                    var request = new System.Net.Http.HttpRequestMessage(
+                        new System.Net.Http.HttpMethod("PATCH"),
+                        "orders/" + order_ID + "/status"
                     );
 
-                    request.Content = new StringContent("", Encoding.UTF8, "application/json");
+                    request.Content = content;
 
                     var response = client.SendAsync(request).Result;
+                    string responseText = response.Content.ReadAsStringAsync().Result;
 
-                    string result = response.Content.ReadAsStringAsync().Result;
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        MessageBox.Show("API Error FinishOrder:\n" + response.StatusCode + "\n" + responseText);
+                        return false;
+                    }
 
-                    if (response.IsSuccessStatusCode)
-                    {
-                        MessageBox.Show("Order completed successfully.");
-                    }
-                    else
-                    {
-                        MessageBox.Show("API Error FinishOrder:\n" + response.StatusCode + "\n" + result);
-                    }
+                    return true;
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("API Error FinishOrder:\n" + ex.Message);
+                MessageBox.Show("FinishOrder failed:\n" + ex.Message);
+                return false;
             }
         }
         //login
@@ -789,6 +769,24 @@ namespace RestaurantPOS
             }
 
             return result;
+        }
+
+        public int GetActiveOrderIdByTable(int tableNumber)
+        {
+            DataTable orders = LoadOrders('A'); // A = active orders
+
+            foreach (DataRow row in orders.Rows)
+            {
+                int orderId = Convert.ToInt32(row["Order_ID"]);
+                int tableNo = Convert.ToInt32(row["Table_ID"]);
+
+                if (tableNo == tableNumber)
+                {
+                    return orderId;
+                }
+            }
+
+            return 0;
         }
 
         /// <summary>

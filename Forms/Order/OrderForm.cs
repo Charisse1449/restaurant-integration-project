@@ -114,18 +114,9 @@ namespace RestaurantPOS.Forms
 
                 if (dTableActiveOrder.Rows.Count == 0)
                 {
-                    //this.Close();
-
-                    //DialogResult res = MessageBox.Show("There is no active order for this table. Would you like to create one?", "Confirmation", MessageBoxButtons.YesNo);
-                    //if (res == DialogResult.Yes)
-                    //{
-                    //    OrderForm fOrder = new OrderForm(table_id, "addWithTableID");
-                    //    fOrder.ShowDialog();
-                    //}
-                    //if (res == DialogResult.No)
-                    //{
-
-                    //}
+                    MessageBox.Show("No active order found for this table.");
+                    this.Close();
+                    return;
                 }
                 else
                 {
@@ -460,22 +451,36 @@ namespace RestaurantPOS.Forms
 
         private void buttonCompleteOrder_Click(object sender, EventArgs e)
         {
-            DialogResult res = MessageBox.Show("Are you sure you want to complete this order?", "Confirmation", MessageBoxButtons.YesNo);
-            if (res == DialogResult.Yes)
+            try
             {
-                Configurator configurator = new Configurator();
-                configurator.FinishOrder(order_id);
+                if (order_id <= 0)
+                {
+                    MessageBox.Show("Invalid order ID. Cannot complete this order.");
+                    return;
+                }
 
-                MessageBox.Show("Succesfully finished.");
-                this.Close();
+                DialogResult res = MessageBox.Show(
+                    "Are you sure you want to complete this order?",
+                    "Confirmation",
+                    MessageBoxButtons.YesNo
+                );
 
+                if (res == DialogResult.Yes)
+                {
+                    Configurator configurator = new Configurator();
+                    bool success = configurator.FinishOrder(order_id);
+
+                    if (success)
+                    {
+                        MessageBox.Show("Order completed successfully!");
+                        this.Close();
+                    }
+                }
             }
-            if (res == DialogResult.No)
+            catch (Exception ex)
             {
-
+                MessageBox.Show("Complete order failed:\n" + ex.Message);
             }
-
-
         }
 
         private void textBoxTotal_Click(object sender, EventArgs e)
