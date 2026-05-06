@@ -13,6 +13,8 @@ use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\PurchaseController;
 use App\Http\Controllers\Api\WasteController;
+use Illuminate\Support\Facades\Hash;
+use App\Models\User;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,6 +26,29 @@ use App\Http\Controllers\Api\WasteController;
 | be assigned to the "api" middleware group. Make something great!
 |
 */
+
+
+Route::post('/login', function (Request $request) {
+    $request->validate([
+        'email' => 'required|email',
+        'password' => 'required'
+    ]);
+
+    if ($request->email === 'staff@marlena.com' && $request->password === 'password') {
+        $user = User::where('email', 'staff@marlena.com')->first();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Login successful',
+            'user' => $user
+        ]);
+    }
+
+    return response()->json([
+        'success' => false,
+        'message' => 'Invalid email or password'
+    ], 401);
+});
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();

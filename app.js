@@ -677,27 +677,54 @@ document.addEventListener('alpine:init', () => {
                 Notification.requestPermission();
             }
 
-            if (this.kdsAutoRefresh) {
-                this.startKdsAutoRefresh();
-            }
-
-            this.$watch('currentTab', (newTab) => {
-                if (newTab === 'kds' && this.kdsAutoRefresh) {
-                    this.startKdsAutoRefresh();
-                } else {
-                    this.stopKdsAutoRefresh();
-                }
-            });
-
-            const savedLang = localStorage.getItem('restaurant_lang');
-            this.language = savedLang || 'en';
-            this.direction = this.language === 'ar' ? 'rtl' : 'ltr';
-
-            if (this.language === 'ar') {
-                this.translations = this.arTranslations;
-            }
-
             this.initRealtimeSync();
+        },
+
+        async loginWebAdmin() {
+            this.loginError = "";
+
+            if (!this.loginEmail || !this.loginPassword) {
+                this.loginError = "Please enter email and password.";
+                return;
+            }
+
+            try {
+                const response = await fetch(`${this.API_URL}/login`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({
+                        email: this.loginEmail,
+                        password: this.loginPassword
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || result.success !== true) {
+                    this.loginError = "Invalid email or password.";
+                    return;
+                }
+
+                localStorage.setItem("web_admin_logged_in", "true");
+                this.isLoggedIn = true;
+
+                await this.initApp();
+
+            } catch (error) {
+                console.error("Login error:", error);
+                this.loginError = "Cannot connect to server.";
+            }
+        },
+
+        logoutWebAdmin() {
+            localStorage.removeItem("web_admin_logged_in");
+            this.isLoggedIn = false;
+            this.loginEmail = "";
+            this.loginPassword = "";
+            this.loginError = "";
         },
         
         // Load recipes from localStorage
