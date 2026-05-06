@@ -229,7 +229,7 @@ namespace RestaurantPOS
         /// <param name="id"></param>
         /// <returns></returns>
 
-        public bool LoginStaff(string username, string password)
+        public bool LoginStaff(string email, string password)
         {
             try
             {
@@ -239,7 +239,7 @@ namespace RestaurantPOS
 
                     var data = new
                     {
-                        email = username,
+                        email = email,
                         password = password
                     };
 
@@ -252,7 +252,9 @@ namespace RestaurantPOS
                     if (!response.IsSuccessStatusCode)
                         return false;
 
-                    return true;
+                    JObject obj = JObject.Parse(result);
+
+                    return obj["success"] != null && obj["success"].ToString().ToLower() == "true";
                 }
             }
             catch
