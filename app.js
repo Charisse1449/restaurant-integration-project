@@ -2,6 +2,10 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('app', () => ({
 
         API_URL: 'http://127.0.0.1:8000/api',
+        isLoggedIn: localStorage.getItem("web_admin_logged_in") === "true",
+        loginEmail: "",
+        loginPassword: "",
+        loginError: "",
         // App state
         currentTab: 'recipes',
         language: 'en',
@@ -663,6 +667,54 @@ document.addEventListener('alpine:init', () => {
             'on-time': 'في الوقت المحدد'
         },
         
+        //login
+        async loginWebAdmin() {
+            this.loginError = "";
+
+            if (!this.loginEmail || !this.loginPassword) {
+                this.loginError = "Please enter email and password.";
+                return;
+            }
+
+            try {
+                const response = await fetch(`${this.API_URL}/login`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({
+                        email: this.loginEmail,
+                        password: this.loginPassword
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || result.success !== true) {
+                    this.loginError = "Invalid email or password.";
+                    return;
+                }
+
+                localStorage.setItem("web_admin_logged_in", "true");
+                this.isLoggedIn = true;
+
+                await this.initApp();
+
+            } catch (error) {
+                console.error("Login error:", error);
+                this.loginError = "Cannot connect to server.";
+            }
+        },
+
+        logoutWebAdmin() {
+            localStorage.removeItem("web_admin_logged_in");
+            this.isLoggedIn = false;
+            this.loginEmail = "";
+            this.loginPassword = "";
+            this.loginError = "";
+        },
+        
         // Initialize app
         async initApp() {
             await this.loadRecipes();
@@ -671,7 +723,7 @@ document.addEventListener('alpine:init', () => {
             await this.loadTables();
             this.loadChefs();
             this.loadStations();
-            this.loadInventory();
+            await this.loadInventory();
 
             if ('Notification' in window) {
                 Notification.requestPermission();
@@ -890,21 +942,41 @@ document.addEventListener('alpine:init', () => {
             }
         },
         
-        // Load inventory from localStorage
-        loadInventory() {
-            const savedInventory = localStorage.getItem('restaurant_inventory');
-            this.inventory = savedInventory ? JSON.parse(savedInventory) : this.getDefaultInventory();
-            
-            const savedSuppliers = localStorage.getItem('restaurant_suppliers');
-            this.suppliers = savedSuppliers ? JSON.parse(savedSuppliers) : this.getDefaultSuppliers();
-            
-            const savedPurchases = localStorage.getItem('restaurant_purchases');
-            this.purchases = savedPurchases ? JSON.parse(savedPurchases) : [];
-            
-            const savedWaste = localStorage.getItem('restaurant_waste');
-            this.waste = savedWaste ? JSON.parse(savedWaste) : [];
-            
-            this.updateInventoryAlerts();
+        // Load inventory from Laravel API
+        async loadInventory() {
+            try {
+                const response = await fetch(`${this.API_URL}/inventory`);
+                const result = await response.json();
+
+                const rows = Array.isArray(result.data?.data)
+                    ? result.data.data
+                    : Array.isArray(result.data)
+                        ? result.data
+                        : Array.isArray(result)
+                            ? result
+                            : [];
+
+                this.inventory = rows.map(item => ({
+                    id: item.id,
+                    name: item.name,
+                    category: item.category,
+                    unit: item.unit,
+                    currentStock: Number(item.current_stock || item.currentStock || 0),
+                    minStock: Number(item.min_stock || item.minStock || 0),
+                    maxStock: Number(item.max_stock || item.maxStock || 0),
+                    cost: Number(item.cost || 0),
+                    supplier: item.supplier || "",
+                    location: item.location || "",
+                    expiryDate: item.expiry_date || item.expiryDate || null,
+                    notes: item.notes || ""
+                }));
+
+                this.updateInventoryAlerts();
+
+            } catch (error) {
+                console.error("API loadInventory error:", error);
+                this.inventory = [];
+            }
         },
         
         // Save inventory to localStorage
@@ -1410,13 +1482,42 @@ document.addEventListener('alpine:init', () => {
             }
         },
         
-        // Enhanced KDS Functions
         getFilteredOrders() {
-            const orders = Array.isArray(this.orders) ? this.orders : [];
+            let orders = Array.isArray(this.orders) ? [...this.orders] : [];
 
-            return orders.filter(order =>
-                order && ['new', 'preparing', 'ready'].includes(order.status)
-            );
+            if (this.kdsView !== "all") {
+                orders = orders.filter(order => order.status === this.kdsView);
+            } else {
+                orders = orders.filter(order =>
+                    order && ["new", "preparing", "ready"].includes(order.status)
+                );
+            }
+
+            if (this.kdsFilter !== "all") {
+                orders = orders.filter(order =>
+                    (order.type || "").toLowerCase() === this.kdsFilter.toLowerCase()
+                );
+            }
+
+            if (this.kdsStationFilter !== "all") {
+                orders = orders.filter(order =>
+                    (order.assignedStation || "").toLowerCase() === this.kdsStationFilter.toLowerCase()
+                );
+            }
+
+            if (this.kdsSort === "time") {
+                orders.sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+            }
+
+            if (this.kdsSort === "priority") {
+                orders.sort((a, b) => this.getOrderPriority(b) - this.getOrderPriority(a));
+            }
+
+            if (this.kdsSort === "table") {
+                orders.sort((a, b) => Number(a.tableNumber || 0) - Number(b.tableNumber || 0));
+            }
+
+            return orders;
         },
         
         getOrderPriority(order) {
@@ -3411,34 +3512,86 @@ document.addEventListener('alpine:init', () => {
             this.showInventoryForm = true;
         },
         
-        saveInventoryItem() {
-            if (this.editingInventory) {
-                // Update existing item
-                const index = this.inventory.findIndex(item => item.id === this.inventoryForm.id);
-                if (index !== -1) {
-                    this.inventory[index] = { ...this.inventoryForm };
-                }
-            } else {
-                // Add new item
-                const newItem = {
-                    ...this.inventoryForm,
-                    id: Date.now(),
-                    createdAt: Date.now(),
-                    lastUpdated: Date.now()
+        // Save inventory item to Laravel API
+        async saveInventoryItem() {
+            try {
+                const data = {
+                    name: this.inventoryForm.name,
+                    category: this.inventoryForm.category,
+                    unit: this.inventoryForm.unit,
+                    current_stock: Number(this.inventoryForm.currentStock || 0),
+                    min_stock: Number(this.inventoryForm.minStock || 0),
+                    max_stock: Number(this.inventoryForm.maxStock || 0),
+                    cost: Number(this.inventoryForm.cost || 0),
+                    supplier: this.inventoryForm.supplier || "",
+                    location: this.inventoryForm.location || "",
+                    expiry_date: this.inventoryForm.expiryDate || null,
+                    notes: this.inventoryForm.notes || ""
                 };
-                this.inventory.push(newItem);
+
+                const url = this.editingInventory
+                    ? `${this.API_URL}/inventory/${this.inventoryForm.id}`
+                    : `${this.API_URL}/inventory`;
+
+                const method = this.editingInventory ? "PUT" : "POST";
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    console.error(result);
+                    alert("Failed to save inventory item.");
+                    return;
+                }
+
+                alert("Inventory item saved successfully!");
+
+                await this.loadInventory();
+
+                this.showInventoryForm = false;
+                this.editingInventory = null;
+                this.resetInventoryForm();
+
+            } catch (error) {
+                console.error("Save inventory error:", error);
+                alert("Error saving inventory item.");
             }
-            
-            this.saveInventory();
-            this.showInventoryForm = false;
-            this.editingInventory = null;
-            this.resetInventoryForm();
         },
+
         
-        deleteInventory(id) {
-            if (confirm('Are you sure you want to delete this inventory item?')) {
-                this.inventory = this.inventory.filter(item => item.id !== id);
-                this.saveInventory();
+        // Delete inventory item from Laravel API
+        async deleteInventory(id) {
+            if (!confirm("Are you sure you want to delete this inventory item?")) return;
+
+            try {
+                const response = await fetch(`${this.API_URL}/inventory/${id}`, {
+                    method: "DELETE",
+                    headers: {
+                        "Accept": "application/json"
+                    }
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    console.error(result);
+                    alert("Failed to delete inventory item.");
+                    return;
+                }
+
+                await this.loadInventory();
+
+            } catch (error) {
+                console.error("Delete inventory error:", error);
+                alert("Error deleting inventory item.");
             }
         },
         

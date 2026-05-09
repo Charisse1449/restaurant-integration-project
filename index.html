@@ -23,7 +23,41 @@
     <script src="app.js"></script>
    
 </head>
-<body x-data="app()" x-init="initApp()" :dir="direction" :class="{'rtl': direction === 'rtl'}">
+<body x-data="app()" x-init="isLoggedIn ? initApp() : null" :dir="direction" :class="{'rtl': direction === 'rtl'}">
+    <!-- login -->
+     <div x-show="!isLoggedIn" class="min-h-screen flex items-center justify-center bg-gray-100">
+        <div class="bg-white p-8 rounded-lg shadow-lg w-96">
+            <h2 class="text-2xl font-bold text-center text-teal-700 mb-6">
+                Admin Login
+            </h2>
+
+            <input
+                type="email"
+                x-model="loginEmail"
+                placeholder="Email"
+                class="w-full border rounded-md px-4 py-2 mb-4"
+            >
+
+            <input
+                type="password"
+                x-model="loginPassword"
+                placeholder="Password"
+                class="w-full border rounded-md px-4 py-2 mb-4"
+                @keydown.enter="loginWebAdmin()"
+            >
+
+            <p x-show="loginError" x-text="loginError" class="text-red-500 text-sm mb-4"></p>
+
+            <button
+                @click="loginWebAdmin()"
+                class="w-full bg-teal-700 text-white py-2 rounded-md"
+            >
+                Login
+            </button>
+        </div>
+    </div>
+
+    <div x-show="isLoggedIn">
     <!-- App Header -->
     <header class="bg-primary text-white shadow-md">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
@@ -97,6 +131,11 @@
                     <button @click="showSettings = true" 
                             class="px-3 py-1 rounded-md hover:bg-white hover:text-primary transition">
                         <i class="fas fa-cog"></i>
+                    </button>
+                    <button @click="logoutWebAdmin()"
+                            class="px-3 py-1 rounded-md bg-red-500 text-white hover:bg-red-600 transition">
+                        <i class="fas fa-sign-out-alt mr-1"></i>
+                        Log Out
                     </button>
                 </div>
             </div>
@@ -2571,5 +2610,6 @@
     <audio id="newOrderSound" preload="auto">
         <source src="https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3" type="audio/mpeg">
     </audio>
+    </div>
 </body>
 </html>
