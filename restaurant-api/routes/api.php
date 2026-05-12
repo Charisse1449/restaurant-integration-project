@@ -34,8 +34,11 @@ Route::post('/login', function (Request $request) {
         'password' => 'required'
     ]);
 
-    if ($request->email === 'staff@marlena.com' && $request->password === 'password') {
-        $user = User::where('email', 'staff@marlena.com')->first();
+    if (
+        ($request->email === 'staff@marlena.com' || $request->email === 'admin@marlena.com')
+        && $request->password === 'password'
+    ) {
+        $user = User::where('email', $request->email)->first();
 
         return response()->json([
             'success' => true,
